@@ -1,0 +1,844 @@
+"use client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Movie, Profile, SearchMovie } from "@/lib/types";
+
+async function api(path: string, method = "GET", body?: unknown) {
+  const r = await fetch("/api/" + path, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const d = await r.json();
+  if (!r.ok)
+    throw new Error(d.error || "Something went wrong. Please try again.");
+  return d;
+}
+function Brand() {
+  return (
+    <a className="brand" href="/" aria-label="Frame home">
+      <svg viewBox="0 0 28 28" aria-hidden="true">
+        <path
+          d="M4 4h20v20H4z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+        />
+        <path
+          d="M9 4v20M19 4v20M4 10h5m-5 8h5m10-8h5m-5 8h5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+      </svg>
+      Frame<span className="brand-note">a list for two</span>
+    </a>
+  );
+}
+function Poster({
+  movie,
+  small = false,
+}: {
+  movie: SearchMovie;
+  small?: boolean;
+}) {
+  const [broken, setBroken] = useState(false);
+  return movie.poster && !broken ? (
+    <img
+      className={small ? "poster small" : "poster"}
+      src={movie.poster}
+      alt={movie.title + " poster"}
+      loading="lazy"
+      onError={() => setBroken(true)}
+    />
+  ) : (
+    <div
+      className={"poster poster-fallback" + (small ? " small" : "")}
+      aria-label="No poster available"
+    >
+      <span>{movie.title}</span>
+      <span>{movie.year || "A film to remember"}</span>
+    </div>
+  );
+}
+function Artwork() {
+  return (
+    <div className="artwork" aria-hidden="true">
+      <div className="art-film film-green">
+        <span>
+          Make a little
+          <br />
+          room for
+        </span>
+        <strong>ADVENTURE</strong>
+        <div className="arch" />
+      </div>
+      <div className="art-film film-purple">
+        <span>
+          Stay for
+          <br />
+          the story.
+        </span>
+        <div className="moon" />
+      </div>
+      <div className="art-film film-pink">
+        <div className="frame-line" />
+        <span>
+          A night
+          <br />
+          at the
+        </span>
+        <strong>MOVIES.</strong>
+        <p>Archie & Susu</p>
+      </div>
+      <div className="art-film film-orange">
+        <span>
+          Something
+          <br />
+          to look
+        </span>
+        <strong>FORWARD TO.</strong>
+        <div className="sun" />
+      </div>
+      <div className="art-film film-blue">
+        <span>
+          One more
+          <br />
+          before bed.
+        </span>
+        <div className="blue-window" />
+      </div>
+    </div>
+  );
+}
+function Credits() {
+  return (
+    <footer>
+      <span>Frame · For Archie & Susu</span>
+      <details>
+        <summary>Movie data & credits</summary>
+        <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer">
+          <img className="tmdb-logo" src="/tmdb.svg" alt="TMDB" />
+        </a>
+        <p>
+          This product uses the TMDB API but is not endorsed or certified by
+          TMDB. Posters and movie details from TMDB. IMDb ratings supplied by{" "}
+          <a href="https://www.omdbapi.com" target="_blank" rel="noreferrer">
+            OMDb
+          </a>
+          . Ratings may change; unavailable ratings are shown as such.
+        </p>
+      </details>
+    </footer>
+  );
+}
+
+export default function Frame({
+  initialProfile,
+}: {
+  initialProfile: Profile | null;
+}) {
+  const [who, setWho] = useState<Profile | null>(initialProfile),
+    [choice, setChoice] = useState<Profile>("Archie"),
+    [passcode, setPasscode] = useState(""),
+    [loginBusy, setLoginBusy] = useState(false),
+    [error, setError] = useState("");
+  const [movies, setMovies] = useState<Movie[]>([]),
+    [loaded, setLoaded] = useState(false),
+    [tab, setTab] = useState<"watchlist" | "watched">("watchlist"),
+    [filter, setFilter] = useState(""),
+    [sort, setSort] = useState("recent"),
+    [busy, setBusy] = useState<string | null>(null),
+    [notice, setNotice] = useState(""),
+    [adding, setAdding] = useState(false),
+    [catalog, setCatalog] = useState(true),
+    [ratings, setRatings] = useState(true),
+    [randomId, setRandomId] = useState<string | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const refresh = useCallback(async () => {
+    try {
+      const d = await api("movies");
+      setMovies(d.movies);
+      setCatalog(d.catalogReady);
+      setRatings(d.ratingsReady);
+      setLoaded(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+  useEffect(() => {
+    if (!who) return;
+    void refresh();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, 30000);
+    const focus = () => void refresh();
+    window.addEventListener("focus", focus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", focus);
+    };
+  }, [who, refresh]);
+  useEffect(() => {
+    if (adding) dialog.current?.showModal();
+    else dialog.current?.close();
+  }, [adding]);
+  async function login(e: React.SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoginBusy(true);
+    setError("");
+    try {
+      await api("session", "POST", { profile: choice, passcode });
+      setPasscode("");
+      setWho(choice);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoginBusy(false);
+    }
+  }
+  async function logout() {
+    try {
+      await api("session", "DELETE");
+      setWho(null);
+      setMovies([]);
+      setLoaded(false);
+      setError("");
+      setNotice("");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  async function update(movie: Movie, deleted = false) {
+    if (
+      deleted &&
+      !window.confirm("Remove " + movie.title + " from your shared list?")
+    )
+      return;
+    setBusy(movie.id);
+    setError("");
+    try {
+      const d = await api(
+        "movies/" + movie.id,
+        "PATCH",
+        deleted ? { deleted: true } : { watched: !movie.watched },
+      );
+      setMovies((ms) =>
+        deleted
+          ? ms.filter((m) => m.id !== movie.id)
+          : ms.map((m) => (m.id === movie.id ? d.movie : m)),
+      );
+      setNotice(
+        deleted
+          ? "Movie removed."
+          : movie.watched
+            ? "Moved back to your watchlist."
+            : "Marked as watched. Find it in Watched.",
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+  const unwatched = movies.filter((m) => !m.watched),
+    watched = movies.filter((m) => m.watched);
+  const visible = movies
+    .filter(
+      (m) =>
+        m.watched === (tab === "watched") &&
+        m.title.toLowerCase().includes(filter.toLowerCase()),
+    )
+    .sort((a, b) =>
+      sort === "title"
+        ? a.title.localeCompare(b.title)
+        : sort === "rating"
+          ? Number(b.rating || -1) - Number(a.rating || -1)
+          : sort === "year"
+            ? Number(b.year) - Number(a.year)
+            : tab === "watched"
+              ? (b.watchedAt || "").localeCompare(a.watchedAt || "")
+              : b.addedAt.localeCompare(a.addedAt),
+    );
+  return (
+    <>
+      <header>
+        <Brand />
+        {who ? (
+          <>
+            <nav aria-label="Movie lists">
+              <button
+                className={tab === "watchlist" ? "active" : ""}
+                onClick={() => {
+                  setTab("watchlist");
+                  setRandomId(null);
+                }}
+              >
+                Watchlist <span>{unwatched.length}</span>
+              </button>
+              <button
+                className={tab === "watched" ? "active" : ""}
+                onClick={() => {
+                  setTab("watched");
+                  setRandomId(null);
+                }}
+              >
+                Watched <span>{watched.length}</span>
+              </button>
+            </nav>
+            <div className="profile">
+              <span className={"initial " + who.toLowerCase()}>{who[0]}</span>
+              <span>{who}</span>
+              <button className="text-button" onClick={logout}>
+                Switch / lock
+              </button>
+            </div>
+          </>
+        ) : (
+          <span className="header-caption">Your next movie night, sorted.</span>
+        )}
+      </header>
+      {!who ? (
+        <main className="welcome">
+          <section className="welcome-intro">
+            <div className="welcome-copy">
+              <h1>
+                <span>Good films.</span>
+                <br />
+                Even better company.
+              </h1>
+              <p>
+                A little place for everything we want to watch.
+                <br />
+                And everything we’ve watched together.
+              </p>
+            </div>
+            <form className="unlock" onSubmit={login}>
+              <h2>Make yourself at home.</h2>
+              <fieldset>
+                <legend>Who’s watching?</legend>
+                <div className="profile-options">
+                  {(["Archie", "Susu"] as Profile[]).map((name) => (
+                    <label
+                      key={name}
+                      className={choice === name ? "selected" : ""}
+                    >
+                      <input
+                        type="radio"
+                        name="profile"
+                        value={name}
+                        checked={choice === name}
+                        onChange={() => setChoice(name)}
+                      />
+                      <span className={"initial " + name.toLowerCase()}>
+                        {name[0]}
+                      </span>
+                      {name}
+                      <span className="selected-check">
+                        {choice === name ? "✓" : ""}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <label className="field-label" htmlFor="passcode">
+                Our passcode
+              </label>
+              <input
+                id="passcode"
+                type="password"
+                inputMode="numeric"
+                autoComplete="current-password"
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                placeholder="Enter passcode"
+                required
+                maxLength={32}
+              />
+              {error ? (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+              <button className="primary" disabled={loginBusy}>
+                {loginBusy ? "Opening…" : "Open our movie list"}
+              </button>
+              <p className="form-note">
+                One shared list. Two excellent opinions.
+              </p>
+            </form>
+          </section>
+          <Artwork />
+          <div className="welcome-bottom">
+            <p>Save the ones that catch your eye.</p>
+            <p>Tick them off after the credits.</p>
+          </div>
+        </main>
+      ) : (
+        <main className="collection">
+          <section className="collection-intro">
+            <div>
+              <p className="greeting">Hey {who}, it’s movie night.</p>
+              <h1>
+                {tab === "watched" ? (
+                  <>
+                    The credits rolled.
+                    <br />
+                    <span>The memories stay.</span>
+                  </>
+                ) : (
+                  <>
+                    What shall we
+                    <br />
+                    <span>watch tonight?</span>
+                  </>
+                )}
+              </h1>
+              <p>
+                {tab === "watched"
+                  ? "Every film you’ve ticked off, all in one place."
+                  : "Your shared watchlist. A good film is better together."}
+              </p>
+              <button
+                className="primary add-main"
+                onClick={() => setAdding(true)}
+              >
+                + Add a movie
+              </button>
+            </div>
+            <div className="collection-art" aria-hidden="true">
+              <Artwork />
+            </div>
+          </section>
+          <section
+            className="list-section"
+            aria-label={
+              tab === "watched" ? "Watched movies" : "Movies to watch"
+            }
+          >
+            <div className="list-heading">
+              <h2>
+                {tab === "watched" ? "Watched together" : "On our watchlist"}{" "}
+                <span>
+                  {tab === "watched" ? watched.length : unwatched.length}
+                </span>
+              </h2>
+              {tab === "watchlist" && unwatched.length > 0 ? (
+                <button
+                  className="text-button surprise"
+                  onClick={() => {
+                    const m =
+                      unwatched[Math.floor(Math.random() * unwatched.length)];
+                    setRandomId(m.id);
+                    setFilter("");
+                    setNotice("Tonight’s pick: " + m.title);
+                    setTimeout(
+                      () =>
+                        document
+                          .getElementById("movie-" + m.id)
+                          ?.scrollIntoView({
+                            behavior: window.matchMedia(
+                              "(prefers-reduced-motion: reduce)",
+                            ).matches
+                              ? "instant"
+                              : "smooth",
+                            block: "center",
+                          }),
+                      30,
+                    );
+                  }}
+                >
+                  Pick for us
+                </button>
+              ) : null}
+            </div>
+            <div className="list-tools">
+              <label className="list-filter">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="10" cy="10" r="6" />
+                  <path d="m15 15 5 5" />
+                </svg>
+                <input
+                  aria-label="Filter your list"
+                  placeholder="Find a film in our list…"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                />
+              </label>
+              <label className="sort-label">
+                Sort by{" "}
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  aria-label="Sort movies"
+                >
+                  <option value="recent">
+                    Recently {tab === "watched" ? "watched" : "added"}
+                  </option>
+                  <option value="rating">IMDb rating</option>
+                  <option value="title">Title A–Z</option>
+                  <option value="year">Release year</option>
+                </select>
+              </label>
+            </div>
+            {error ? (
+              <div className="error error-bar" role="alert">
+                {error}{" "}
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setError("");
+                    void refresh();
+                  }}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : null}
+            <p className="notice" role="status">
+              {notice}
+            </p>
+            {!catalog && loaded ? (
+              <p className="connection-note">
+                Movie search isn’t connected yet. You can add films by title.
+              </p>
+            ) : null}
+            {!ratings && loaded ? (
+              <p className="connection-note">
+                IMDb ratings will be available once OMDb is connected.
+              </p>
+            ) : null}
+            {!loaded ? (
+              <p className="empty">Loading our list…</p>
+            ) : visible.length ? (
+              <div className="movie-grid">
+                {visible.map((movie) => (
+                  <article
+                    id={"movie-" + movie.id}
+                    key={movie.id}
+                    className={
+                      "movie" + (randomId === movie.id ? " chosen" : "")
+                    }
+                  >
+                    <div className="poster-wrap">
+                      <Poster movie={movie} />
+                      <button
+                        className={
+                          "watch-toggle" + (movie.watched ? " checked" : "")
+                        }
+                        disabled={busy === movie.id}
+                        aria-label={
+                          (movie.watched
+                            ? "Move back to watchlist: "
+                            : "Mark watched: ") + movie.title
+                        }
+                        title={
+                          movie.watched
+                            ? "Move back to watchlist"
+                            : "Mark watched"
+                        }
+                        onClick={() => void update(movie)}
+                      >
+                        {busy === movie.id ? "…" : "✓"}
+                      </button>
+                      {randomId === movie.id ? (
+                        <span className="tonight">Tonight’s pick</span>
+                      ) : null}
+                    </div>
+                    <div className="movie-info">
+                      <div className="movie-meta">
+                        <span>{movie.year || "Year unknown"}</span>
+                        {movie.rating ? (
+                          <a
+                            className="rating"
+                            href={
+                              "https://www.imdb.com/title/" + movie.imdbId + "/"
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={
+                              "IMDb rating " + movie.rating + " out of 10"
+                            }
+                          >
+                            <span>IMDb</span> {movie.rating}
+                          </a>
+                        ) : (
+                          <span className="unrated">IMDb —</span>
+                        )}
+                      </div>
+                      <h3>{movie.title}</h3>
+                      <div className="movie-bottom">
+                        <p>
+                          {movie.watched
+                            ? "Watched by " + movie.watchedBy
+                            : "Added by " + movie.addedBy}
+                        </p>
+                        <button
+                          className="remove"
+                          aria-label={"Remove " + movie.title}
+                          onClick={() => void update(movie, true)}
+                          disabled={busy === movie.id}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty">
+                <div className="empty-film" aria-hidden="true">
+                  {tab === "watched" ? "✓" : "+"}
+                </div>
+                <h3>
+                  {filter
+                    ? "No matching films."
+                    : tab === "watched"
+                      ? "The first of many."
+                      : "A new list. So many possibilities."}
+                </h3>
+                <p>
+                  {filter
+                    ? "Try another title."
+                    : tab === "watched"
+                      ? "Tick a film on your watchlist after you’ve watched it."
+                      : "Search for a film you’ve been meaning to watch."}
+                </p>
+                {!filter && tab === "watchlist" ? (
+                  <button className="primary" onClick={() => setAdding(true)}>
+                    Add your first movie
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </section>
+        </main>
+      )}
+      <Credits />
+      <dialog
+        ref={dialog}
+        className="add-dialog"
+        onCancel={() => setAdding(false)}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setAdding(false);
+        }}
+      >
+        {adding ? (
+          <AddMovie
+            existing={movies}
+            onClose={() => setAdding(false)}
+            onAdd={(movie, duplicate) => {
+              setMovies((ms) => [
+                movie,
+                ...ms.filter((m) => m.id !== movie.id),
+              ]);
+              setNotice(
+                duplicate
+                  ? "That film is already in our " +
+                      (movie.watched ? "watched list." : "watchlist.")
+                  : movie.title + " added to our watchlist.",
+              );
+              setAdding(false);
+              setTab(movie.watched ? "watched" : "watchlist");
+              setFilter("");
+            }}
+          />
+        ) : null}
+      </dialog>
+    </>
+  );
+}
+
+function AddMovie({
+  existing,
+  onClose,
+  onAdd,
+}: {
+  existing: Movie[];
+  onClose: () => void;
+  onAdd: (movie: Movie, duplicate: boolean) => void;
+}) {
+  const [query, setQuery] = useState(""),
+    [results, setResults] = useState<SearchMovie[]>([]),
+    [searching, setSearching] = useState(false),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState<string | null>(null),
+    [manual, setManual] = useState(false),
+    [year, setYear] = useState(""),
+    [didSearch, setDidSearch] = useState(false);
+  useEffect(() => {
+    if (manual || query.trim().length < 2) {
+      setResults([]);
+      setSearching(false);
+      setDidSearch(false);
+      return;
+    }
+    const controller = new AbortController();
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch("/api/search?q=" + encodeURIComponent(query), {
+          signal: controller.signal,
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        setResults(d.results);
+        setError("");
+        setDidSearch(true);
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          setError((e as Error).message);
+          setResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
+    }, 350);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
+  }, [query, manual]);
+  async function add(movie?: SearchMovie) {
+    setBusy(movie?.id || "manual");
+    setError("");
+    try {
+      const d = await api(
+        "movies",
+        "POST",
+        movie ? { tmdbId: movie.id } : { title: query, year },
+      );
+      onAdd(d.movie, !!d.alreadyAdded);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <div className="dialog-content">
+      <div className="dialog-title">
+        <div>
+          <h2>Find our next film.</h2>
+          <p>Save something worth staying in for.</p>
+        </div>
+        <button
+          className="close"
+          aria-label="Close movie search"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </div>
+      <div className="search-modes">
+        <button
+          className={!manual ? "selected" : ""}
+          onClick={() => {
+            setManual(false);
+            setError("");
+          }}
+        >
+          Search movies
+        </button>
+        <button
+          className={manual ? "selected" : ""}
+          onClick={() => {
+            setManual(true);
+            setError("");
+          }}
+        >
+          Add by title
+        </button>
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (manual) void add();
+        }}
+      >
+        <label className="field-label" htmlFor="movie-search">
+          {manual ? "Movie title" : "Search by movie name"}
+        </label>
+        <input
+          id="movie-search"
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="e.g. Interstellar"
+          maxLength={150}
+          required
+          autoComplete="off"
+        />
+        {manual ? (
+          <>
+            <label className="field-label" htmlFor="movie-year">
+              Release year (optional)
+            </label>
+            <input
+              id="movie-year"
+              inputMode="numeric"
+              value={year}
+              onChange={(e) => setYear(e.target.value.replace(/\D/g, ""))}
+              placeholder="e.g. 2014"
+              pattern="[0-9]{4}"
+              maxLength={4}
+            />
+            <p className="form-note">
+              Saved by title, without a poster or IMDb rating.
+            </p>
+            <button className="primary" disabled={!!busy || !query.trim()}>
+              {busy ? "Adding…" : "Add to our watchlist"}
+            </button>
+          </>
+        ) : null}
+      </form>
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div role="status" className="search-status">
+        {!manual
+          ? searching
+            ? "Searching movies…"
+            : didSearch && !results.length
+              ? "No movies found. Try another spelling or add by title."
+              : query.length < 2
+                ? "Type at least two letters to search."
+                : ""
+          : ""}
+      </div>
+      {!manual ? (
+        <ul className="search-results">
+          {results.map((m) => {
+            const saved = existing.find((x) => x.id === m.id);
+            return (
+              <li key={m.id}>
+                <Poster movie={m} small />
+                <div>
+                  <h3>{m.title}</h3>
+                  <p>{m.year || "Release year unavailable"}</p>
+                </div>
+                <button
+                  className="result-add"
+                  disabled={!!busy || !!saved}
+                  onClick={() => void add(m)}
+                  aria-label={"Add " + m.title}
+                >
+                  {saved
+                    ? saved.watched
+                      ? "Watched"
+                      : "In list"
+                    : busy === m.id
+                      ? "Adding…"
+                      : "+ Add"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}

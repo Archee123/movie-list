@@ -16,23 +16,44 @@ async function api(path: string, method = "GET", body?: unknown) {
 }
 function Brand() {
   return (
-    <a className="brand" href="/" aria-label="Frame home">
-      <svg viewBox="0 0 28 28" aria-hidden="true">
-        <path
-          d="M4 4h20v20H4z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-        />
-        <path
-          d="M9 4v20M19 4v20M4 10h5m-5 8h5m10-8h5m-5 8h5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-      </svg>
-      Frame<span className="brand-note">a list for two</span>
+    <a className="brand" href="/" aria-label="The Palace Cinema home">
+      The Palace Cinema
     </a>
+  );
+}
+function ThemeToggle() {
+  const [dark, setDark] = useState(false);
+  useEffect(
+    () => setDark(document.documentElement.dataset.theme === "dark"),
+    [],
+  );
+  function toggle() {
+    const next = document.documentElement.dataset.theme !== "dark";
+    document.documentElement.dataset.theme = next ? "dark" : "light";
+    setDark(next);
+    try {
+      localStorage.setItem("palace-theme", next ? "dark" : "light");
+    } catch {}
+  }
+  return (
+    <button
+      className="theme-toggle"
+      onClick={toggle}
+      aria-label={dark ? "Use light mode" : "Use dark mode"}
+      title={dark ? "Use light mode" : "Use dark mode"}
+    >
+      {dark ? (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20.5 14A8.5 8.5 0 0 1 10 3.5 8.5 8.5 0 1 0 20.5 14Z" />
+        </svg>
+      )}
+      <span className="theme-label">{dark ? "Light mode" : "Dark mode"}</span>
+    </button>
   );
 }
 function Poster({
@@ -61,60 +82,9 @@ function Poster({
     </div>
   );
 }
-function Artwork() {
-  return (
-    <div className="artwork" aria-hidden="true">
-      <div className="art-film film-green">
-        <span>
-          Make a little
-          <br />
-          room for
-        </span>
-        <strong>ADVENTURE</strong>
-        <div className="arch" />
-      </div>
-      <div className="art-film film-purple">
-        <span>
-          Stay for
-          <br />
-          the story.
-        </span>
-        <div className="moon" />
-      </div>
-      <div className="art-film film-pink">
-        <div className="frame-line" />
-        <span>
-          A night
-          <br />
-          at the
-        </span>
-        <strong>MOVIES.</strong>
-        <p>Archie & Susu</p>
-      </div>
-      <div className="art-film film-orange">
-        <span>
-          Something
-          <br />
-          to look
-        </span>
-        <strong>FORWARD TO.</strong>
-        <div className="sun" />
-      </div>
-      <div className="art-film film-blue">
-        <span>
-          One more
-          <br />
-          before bed.
-        </span>
-        <div className="blue-window" />
-      </div>
-    </div>
-  );
-}
 function Credits() {
   return (
     <footer>
-      <span>Frame · For Archie & Susu</span>
       <details>
         <summary>Movie data & credits</summary>
         <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer">
@@ -122,9 +92,10 @@ function Credits() {
         </a>
         <p>
           This product uses the TMDB API but is not endorsed or certified by
-          TMDB. Posters and movie details from TMDB. IMDb ratings supplied by{" "}
+          TMDB. Posters and movie details from TMDB. IMDb ratings supplied by
+          the{" "}
           <a href="https://www.omdbapi.com" target="_blank" rel="noreferrer">
-            OMDb
+            OMDb API
           </a>
           . Ratings may change; unavailable ratings are shown as such.
         </p>
@@ -286,35 +257,31 @@ export default function Frame({
                 Watched <span>{watched.length}</span>
               </button>
             </nav>
-            <div className="profile">
+          </>
+        ) : null}
+        <div className="header-actions">
+          <ThemeToggle />
+          {who ? (
+            <button
+              className="profile"
+              onClick={logout}
+              aria-label={"Switch account, currently " + who}
+              title="Switch account"
+            >
               <span className={"initial " + who.toLowerCase()}>{who[0]}</span>
               <span>{who}</span>
-              <button className="text-button" onClick={logout}>
-                Switch / lock
-              </button>
-            </div>
-          </>
-        ) : (
-          <span className="header-caption">Your next movie night, sorted.</span>
-        )}
+            </button>
+          ) : null}
+        </div>
       </header>
       {!who ? (
         <main className="welcome">
           <section className="welcome-intro">
-            <div className="welcome-copy">
-              <h1>
-                <span>Good films.</span>
-                <br />
-                Even better company.
-              </h1>
-              <p>
-                A little place for everything we want to watch.
-                <br />
-                And everything we’ve watched together.
-              </p>
-            </div>
-            <form className="unlock" onSubmit={login}>
-              <h2>Make yourself at home.</h2>
+            <form
+              className="unlock"
+              onSubmit={login}
+              aria-label="Open movie list"
+            >
               <fieldset>
                 <legend>Who’s watching?</legend>
                 <div className="profile-options">
@@ -341,8 +308,8 @@ export default function Frame({
                   ))}
                 </div>
               </fieldset>
-              <label className="field-label" htmlFor="passcode">
-                Our passcode
+              <label className="sr-only" htmlFor="passcode">
+                Passcode
               </label>
               <input
                 id="passcode"
@@ -361,55 +328,13 @@ export default function Frame({
                 </p>
               ) : null}
               <button className="primary" disabled={loginBusy}>
-                {loginBusy ? "Opening…" : "Open our movie list"}
+                {loginBusy ? "Opening…" : "Open movie list"}
               </button>
-              <p className="form-note">
-                One shared list. Two excellent opinions.
-              </p>
             </form>
           </section>
-          <Artwork />
-          <div className="welcome-bottom">
-            <p>Save the ones that catch your eye.</p>
-            <p>Tick them off after the credits.</p>
-          </div>
         </main>
       ) : (
         <main className="collection">
-          <section className="collection-intro">
-            <div>
-              <p className="greeting">Hey {who}, it’s movie night.</p>
-              <h1>
-                {tab === "watched" ? (
-                  <>
-                    The credits rolled.
-                    <br />
-                    <span>The memories stay.</span>
-                  </>
-                ) : (
-                  <>
-                    What shall we
-                    <br />
-                    <span>watch tonight?</span>
-                  </>
-                )}
-              </h1>
-              <p>
-                {tab === "watched"
-                  ? "Every film you’ve ticked off, all in one place."
-                  : "Your shared watchlist. A good film is better together."}
-              </p>
-              <button
-                className="primary add-main"
-                onClick={() => setAdding(true)}
-              >
-                + Add a movie
-              </button>
-            </div>
-            <div className="collection-art" aria-hidden="true">
-              <Artwork />
-            </div>
-          </section>
           <section
             className="list-section"
             aria-label={
@@ -417,40 +342,47 @@ export default function Frame({
             }
           >
             <div className="list-heading">
-              <h2>
+              <h1>
                 {tab === "watched" ? "Watched together" : "On our watchlist"}{" "}
                 <span>
                   {tab === "watched" ? watched.length : unwatched.length}
                 </span>
-              </h2>
-              {tab === "watchlist" && unwatched.length > 0 ? (
-                <button
-                  className="text-button surprise"
-                  onClick={() => {
-                    const m =
-                      unwatched[Math.floor(Math.random() * unwatched.length)];
-                    setRandomId(m.id);
-                    setFilter("");
-                    setNotice("Tonight’s pick: " + m.title);
-                    setTimeout(
-                      () =>
-                        document
-                          .getElementById("movie-" + m.id)
-                          ?.scrollIntoView({
-                            behavior: window.matchMedia(
-                              "(prefers-reduced-motion: reduce)",
-                            ).matches
-                              ? "instant"
-                              : "smooth",
-                            block: "center",
-                          }),
-                      30,
-                    );
-                  }}
-                >
-                  Pick for us
-                </button>
-              ) : null}
+              </h1>
+              <div className="list-actions">
+                {(tab === "watched" ? watched.length : unwatched.length) > 0 ? (
+                  <button className="primary" onClick={() => setAdding(true)}>
+                    + Add movie
+                  </button>
+                ) : null}
+                {tab === "watchlist" && unwatched.length > 0 ? (
+                  <button
+                    className="text-button surprise"
+                    onClick={() => {
+                      const m =
+                        unwatched[Math.floor(Math.random() * unwatched.length)];
+                      setRandomId(m.id);
+                      setFilter("");
+                      setNotice("Tonight’s pick: " + m.title);
+                      setTimeout(
+                        () =>
+                          document
+                            .getElementById("movie-" + m.id)
+                            ?.scrollIntoView({
+                              behavior: window.matchMedia(
+                                "(prefers-reduced-motion: reduce)",
+                              ).matches
+                                ? "instant"
+                                : "smooth",
+                              block: "center",
+                            }),
+                        30,
+                      );
+                    }}
+                  >
+                    Pick for us
+                  </button>
+                ) : null}
+              </div>
             </div>
             <div className="list-tools">
               <label className="list-filter">
@@ -460,13 +392,11 @@ export default function Frame({
                 </svg>
                 <input
                   aria-label="Filter your list"
-                  placeholder="Find a film in our list…"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 />
               </label>
               <label className="sort-label">
-                Sort by{" "}
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value)}
@@ -588,28 +518,13 @@ export default function Frame({
               </div>
             ) : (
               <div className="empty">
-                <div className="empty-film" aria-hidden="true">
-                  {tab === "watched" ? "✓" : "+"}
-                </div>
-                <h3>
-                  {filter
-                    ? "No matching films."
-                    : tab === "watched"
-                      ? "The first of many."
-                      : "A new list. So many possibilities."}
-                </h3>
-                <p>
-                  {filter
-                    ? "Try another title."
-                    : tab === "watched"
-                      ? "Tick a film on your watchlist after you’ve watched it."
-                      : "Search for a film you’ve been meaning to watch."}
-                </p>
-                {!filter && tab === "watchlist" ? (
+                {filter ? (
+                  <p role="status">No matching films.</p>
+                ) : (
                   <button className="primary" onClick={() => setAdding(true)}>
-                    Add your first movie
+                    Add movie
                   </button>
-                ) : null}
+                )}
               </div>
             )}
           </section>

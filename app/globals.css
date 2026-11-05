@@ -837,3 +837,67 @@ footer p {
     transition: none !important;
   }
 }
+
+.tag-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+.tag-tabs button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-height: 44px;
+  font-size: 13px;
+}
+.tag-tabs button[aria-pressed="true"] {
+  background: var(--soft);
+  border-color: var(--accent);
+}
+.new-tag {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  max-width: 440px;
+}
+.new-tag input {
+  flex: 1;
+}
+.new-tag .primary {
+  white-space: nowrap;
+}
+.tag-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.movie-tags {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.movie-tags summary {
+  padding: 5px 0;
+  min-height: 32px;
+  overflow-wrap: anywhere;
+}
+.movie-tags fieldset {
+  border: 1px solid var(--line);
+  padding: 8px;
+  border-radius: 6px;
+  margin: 6px 0;
+  background: var(--surface);
+}
+.movie-tags label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--ink);
+}
+.movie-tags input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  accent-color: var(--accent);
+}

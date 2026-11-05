@@ -125,10 +125,47 @@ export default function Frame({
     [catalog, setCatalog] = useState(true),
     [ratings, setRatings] = useState(true),
     [randomId, setRandomId] = useState<string | null>(null);
+  const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [creatingTag, setCreatingTag] = useState(false);
+  const [tagBusy, setTagBusy] = useState(false);
+  async function addTag(e: React.SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setTagBusy(true);
+    setError("");
+    try {
+      const d = await api("tags", "POST", { name: newTag });
+      setTags((ts) =>
+        [...ts.filter((t) => t.id !== d.tag.id), d.tag].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      );
+      setNewTag("");
+      setCreatingTag(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setTagBusy(false);
+    }
+  }
+  async function tagMovie(movie: Movie, ids: string[]) {
+    setBusy(movie.id);
+    setError("");
+    try {
+      const d = await api("movies/" + movie.id, "PATCH", { tags: ids });
+      setMovies((ms) => ms.map((m) => (m.id === movie.id ? d.movie : m)));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
   const dialog = useRef<HTMLDialogElement>(null);
   const refresh = useCallback(async () => {
     try {
-      const d = await api("movies");
+      const [d, t] = await Promise.all([api("movies"), api("tags")]);
+      setTags(t.tags);
       setMovies(d.movies);
       setCatalog(d.catalogReady);
       setRatings(d.ratingsReady);
@@ -218,18 +255,30 @@ export default function Frame({
     .filter(
       (m) =>
         m.watched === (tab === "watched") &&
-        m.title.toLowerCase().includes(filter.toLowerCase()),
+        m.title.toLowerCase().includes(filter.toLowerCase()) &&
+        selectedTags.every((id) => (m.tags || []).includes(id)),
     )
     .sort((a, b) =>
-      sort === "title"
-        ? a.title.localeCompare(b.title)
-        : sort === "rating"
-          ? Number(b.rating || -1) - Number(a.rating || -1)
-          : sort === "year"
-            ? Number(b.year) - Number(a.year)
-            : tab === "watched"
-              ? (b.watchedAt || "").localeCompare(a.watchedAt || "")
-              : b.addedAt.localeCompare(a.addedAt),
+      sort === "tags"
+        ? (a.tags || [])
+            .map((id) => tags.find((t) => t.id === id)?.name || "")
+            .sort()
+            .join(", ")
+            .localeCompare(
+              (b.tags || [])
+                .map((id) => tags.find((t) => t.id === id)?.name || "")
+                .sort()
+                .join(", "),
+            ) || a.title.localeCompare(b.title)
+        : sort === "title"
+          ? a.title.localeCompare(b.title)
+          : sort === "rating"
+            ? Number(b.rating || -1) - Number(a.rating || -1)
+            : sort === "year"
+              ? Number(b.year) - Number(a.year)
+              : tab === "watched"
+                ? (b.watchedAt || "").localeCompare(a.watchedAt || "")
+                : b.addedAt.localeCompare(a.addedAt),
     );
   return (
     <>
@@ -384,6 +433,54 @@ export default function Frame({
                 ) : null}
               </div>
             </div>
+            <div className="tag-tabs" aria-label="Filter by tags">
+              <button
+                aria-pressed={!selectedTags.length}
+                onClick={() => setSelectedTags([])}
+              >
+                All titles
+              </button>
+              {tags.map((t) => (
+                <button
+                  key={t.id}
+                  aria-pressed={selectedTags.includes(t.id)}
+                  onClick={() =>
+                    setSelectedTags((ids) =>
+                      ids.includes(t.id)
+                        ? ids.filter((id) => id !== t.id)
+                        : [...ids, t.id],
+                    )
+                  }
+                >
+                  {t.name}
+                </button>
+              ))}
+              <button
+                onClick={() => setCreatingTag((v) => !v)}
+                aria-expanded={creatingTag}
+              >
+                + New tag
+              </button>
+            </div>
+            {creatingTag ? (
+              <form className="new-tag" onSubmit={addTag}>
+                <input
+                  aria-label="New tag name"
+                  placeholder="e.g. Anime"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  maxLength={30}
+                  required
+                  autoFocus
+                />
+                <button className="primary" disabled={tagBusy}>
+                  {tagBusy ? "Creating…" : "Create tag"}
+                </button>
+              </form>
+            ) : null}
+            {selectedTags.length > 1 ? (
+              <p className="tag-hint">Showing titles with all selected tags.</p>
+            ) : null}
             <div className="list-tools">
               <label className="list-filter">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -407,6 +504,7 @@ export default function Frame({
                   </option>
                   <option value="rating">IMDb rating</option>
                   <option value="title">Title A–Z</option>
+                  <option value="tags">Tags A–Z</option>
                   <option value="year">Release year</option>
                 </select>
               </label>
@@ -477,7 +575,10 @@ export default function Frame({
                     </div>
                     <div className="movie-info">
                       <div className="movie-meta">
-                        <span>{movie.year || "Year unknown"}</span>
+                        <span>
+                          {movie.year || "Year unknown"}
+                          {movie.mediaType === "tv" ? " · Series" : ""}
+                        </span>
                         {movie.rating ? (
                           <a
                             className="rating"
@@ -497,6 +598,46 @@ export default function Frame({
                         )}
                       </div>
                       <h3>{movie.title}</h3>
+                      <details className="movie-tags">
+                        <summary>
+                          {(movie.tags || []).length
+                            ? (movie.tags || [])
+                                .map(
+                                  (id) => tags.find((t) => t.id === id)?.name,
+                                )
+                                .filter(Boolean)
+                                .join(" · ")
+                            : "Add tags"}
+                        </summary>
+                        <fieldset disabled={busy === movie.id}>
+                          <legend className="sr-only">
+                            Tags for {movie.title}
+                          </legend>
+                          {tags.length ? (
+                            tags.map((t) => (
+                              <label key={t.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={(movie.tags || []).includes(t.id)}
+                                  onChange={(e) =>
+                                    void tagMovie(
+                                      movie,
+                                      e.target.checked
+                                        ? [...(movie.tags || []), t.id]
+                                        : (movie.tags || []).filter(
+                                            (id) => id !== t.id,
+                                          ),
+                                    )
+                                  }
+                                />
+                                {t.name}
+                              </label>
+                            ))
+                          ) : (
+                            <p>Create a tag using “New tag” above.</p>
+                          )}
+                        </fieldset>
+                      </details>
                       <div className="movie-bottom">
                         <p>
                           {movie.watched
@@ -518,7 +659,7 @@ export default function Frame({
               </div>
             ) : (
               <div className="empty">
-                {filter ? (
+                {filter || selectedTags.length ? (
                   <p role="status">No matching films.</p>
                 ) : (
                   <button className="primary" onClick={() => setAdding(true)}>
@@ -635,7 +776,7 @@ function AddMovie({
     <div className="dialog-content">
       <div className="dialog-title">
         <div>
-          <h2>Find our next film.</h2>
+          <h2>Find a movie or series.</h2>
           <p>Save something worth staying in for.</p>
         </div>
         <button
@@ -673,7 +814,7 @@ function AddMovie({
         }}
       >
         <label className="field-label" htmlFor="movie-search">
-          {manual ? "Movie title" : "Search by movie name"}
+          {manual ? "Movie title" : "Search movies and series"}
         </label>
         <input
           id="movie-search"
@@ -733,7 +874,10 @@ function AddMovie({
                 <Poster movie={m} small />
                 <div>
                   <h3>{m.title}</h3>
-                  <p>{m.year || "Release year unavailable"}</p>
+                  <p>
+                    {m.year || "Release year unavailable"} ·{" "}
+                    {m.mediaType === "tv" ? "Series" : "Movie"}
+                  </p>
                 </div>
                 <button
                   className="result-add"

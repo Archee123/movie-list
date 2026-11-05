@@ -24,9 +24,10 @@ export async function tmdb(path: string) {
 }
 export function mapMovie(m: Record<string, unknown>): SearchMovie {
   return {
-    id: String(m.id),
-    title: String(m.title),
-    year: String(m.release_date || "").slice(0, 4),
+    id: (m.media_type === "tv" ? "tv-" : "") + String(m.id),
+    mediaType: m.media_type === "tv" ? "tv" : "movie",
+    title: String(m.title || m.name),
+    year: String(m.release_date || m.first_air_date || "").slice(0, 4),
     poster: m.poster_path
       ? "https://image.tmdb.org/t/p/w500" + m.poster_path
       : null,
@@ -34,9 +35,14 @@ export function mapMovie(m: Record<string, unknown>): SearchMovie {
   };
 }
 export async function movieDetails(id: string) {
-  const m = await tmdb("movie/" + id);
+  const tv = id.startsWith("tv-");
+  const m = await tmdb(
+    (tv ? "tv/" + id.slice(3) : "movie/" + id) +
+      "?append_to_response=external_ids",
+  );
+  m.media_type = tv ? "tv" : "movie";
   let rating: string | null = null;
-  const imdbId = m.imdb_id || null;
+  const imdbId = m.imdb_id || m.external_ids?.imdb_id || null;
   if (process.env.OMDB_API_KEY && imdbId) {
     try {
       const r = await fetch(

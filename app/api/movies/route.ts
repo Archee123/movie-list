@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   try {
     const d = await req.json();
     let film;
-    if (typeof d.tmdbId === "string" && /^\d{1,12}$/.test(d.tmdbId)) {
+    if (typeof d.tmdbId === "string" && /^(tv-)?\d{1,12}$/.test(d.tmdbId)) {
       film = await movieDetails(d.tmdbId);
       const existing = await readMovie(film.id);
       if (existing && !existing.deleted)
@@ -61,6 +61,7 @@ export async function POST(req: Request) {
       ...film,
       addedBy: who,
       addedAt: new Date().toISOString(),
+      tags: [],
       watched: false,
       watchedBy: null,
       watchedAt: null,

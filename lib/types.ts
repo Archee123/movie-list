@@ -1,5 +1,7 @@
 export type Profile = "Archie" | "Susu";
 export type Movie = {
+  tags?: string[];
+  mediaType?: "movie" | "tv";
   id: string;
   title: string;
   year: string;
@@ -16,5 +18,5 @@ export type Movie = {
 };
 export type SearchMovie = Pick<
   Movie,
-  "id" | "title" | "year" | "poster" | "overview"
+  "id" | "title" | "year" | "poster" | "overview" | "mediaType"
 >;

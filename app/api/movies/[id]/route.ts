@@ -1,4 +1,5 @@
 import { profile, json, sameOrigin } from "@/lib/auth";
+import { allTags } from "@/lib/tags";
 import { readMovie, saveMovie } from "@/lib/storage";
 export async function PATCH(
   req: Request,
@@ -8,12 +9,27 @@ export async function PATCH(
   if (!who) return json({ error: "Please unlock Frame." }, 401);
   if (!sameOrigin(req)) return json({ error: "Invalid request" }, 403);
   const { id } = await params;
-  if (!/^(\d{1,12}|manual-[a-f0-9-]{36})$/.test(id))
+  if (!/^((?:tv-)?\d{1,12}|manual-[a-f0-9-]{36})$/.test(id))
     return json({ error: "Invalid movie" }, 400);
   try {
     const movie = await readMovie(id);
     if (!movie || movie.deleted) return json({ error: "Movie not found" }, 404);
     const d = await req.json();
+    if (d.tags !== undefined) {
+      const available = new Set((await allTags()).map((t) => t.id));
+      if (
+        !Array.isArray(d.tags) ||
+        d.tags.length > 50 ||
+        !d.tags.every((t: unknown) => typeof t === "string" && available.has(t))
+      )
+        return json({ error: "Invalid tags" }, 400);
+      return json({
+        movie: await saveMovie({
+          ...movie,
+          tags: [...new Set<string>(d.tags)],
+        }),
+      });
+    }
     if (d.deleted !== true && typeof d.watched !== "boolean")
       return json({ error: "Invalid update" }, 400);
     const updated =

@@ -15,9 +15,17 @@ export async function GET(req: Request) {
     );
   try {
     const d = await tmdb(
-      "search/movie?include_adult=false&query=" + encodeURIComponent(q),
+      "search/multi?include_adult=false&query=" + encodeURIComponent(q),
     );
-    return json({ results: d.results.slice(0, 12).map(mapMovie) });
+    return json({
+      results: d.results
+        .filter(
+          (m: { media_type: string }) =>
+            m.media_type === "movie" || m.media_type === "tv",
+        )
+        .slice(0, 12)
+        .map(mapMovie),
+    });
   } catch {
     return json(
       { error: "Movie search is unavailable. Please try again." },

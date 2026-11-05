@@ -10,6 +10,12 @@ Movie search and posters come from TMDB. IMDb ratings come from OMDb, matched by
 
 Both profiles share storage across devices. Lists refresh on window focus and every 30 seconds while visible. Each movie has its own private record; writes to different movies do not overwrite each other. Simultaneous changes to the same movie use the last successful write. Remove soft-deletes a record.
 
+## Tags and series
+
+Use + New tag to create shared categories such as Anime. Each category appears as a selectable tab. Open Add tags beneath any saved title to assign multiple tags. Selected category tabs match titles with all selected tags; All titles clears the filter. Tags A–Z sorts by assigned tag names. Tags stay with titles when marked watched or moved back.
+
+Search includes movies and TV series, labelled in results. TV series use separate identifiers so they cannot collide with movie IDs. Marking a series watched applies to the whole series; episode tracking is not included. Existing saved films continue working without any migration.
+
 ## Local development
 
 Use Node.js 22 or newer. Run `npm ci`, copy `.env.example` to `.env.local`, fill in server-only settings, then run `npm run dev`. Never commit `.env.local` or `.vercel` files.

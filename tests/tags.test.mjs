@@ -60,6 +60,20 @@ test(
         (m) => m.id === movie.id,
       );
       assert.deepEqual(saved.tags, ids);
+      assert.equal(
+        (await call("tags", "DELETE", { id: "invalid" })).status,
+        400,
+      );
+      assert.equal((await call("tags", "DELETE", { id: ids[0] })).status, 200);
+      assert.ok(!(await call("tags")).data.tags.some((t) => t.id === ids[0]));
+      const afterDelete = (await call("movies")).data.movies.find(
+        (m) => m.id === movie.id,
+      );
+      assert.deepEqual(afterDelete.tags, [ids[1]]);
+      assert.equal(
+        (await call("movies/" + movie.id, "PATCH", { tags: [ids[0]] })).status,
+        400,
+      );
       const results = (await call("search?q=Breaking%20Bad")).data.results;
       assert.ok(
         results.some((m) => m.id === "tv-1396" && m.mediaType === "tv"),

@@ -130,6 +130,29 @@ export default function Frame({
   const [newTag, setNewTag] = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
   const [tagBusy, setTagBusy] = useState(false);
+  const [managingTags, setManagingTags] = useState(false);
+  async function deleteTag(tag: { id: string; name: string }) {
+    if (!window.confirm(`Delete “${tag.name}” from all movies and series?`))
+      return;
+    setTagBusy(true);
+    setError("");
+    try {
+      await api("tags", "DELETE", { id: tag.id });
+      setTags((ts) => ts.filter((t) => t.id !== tag.id));
+      setSelectedTags((ids) => ids.filter((id) => id !== tag.id));
+      setMovies((ms) =>
+        ms.map((m) => ({
+          ...m,
+          tags: (m.tags || []).filter((id) => id !== tag.id),
+        })),
+      );
+      setNotice(`Deleted “${tag.name}”.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setTagBusy(false);
+    }
+  }
   async function addTag(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setTagBusy(true);
@@ -461,7 +484,32 @@ export default function Frame({
               >
                 + New tag
               </button>
+              {tags.length ? (
+                <button
+                  onClick={() => setManagingTags((v) => !v)}
+                  aria-expanded={managingTags}
+                >
+                  {managingTags ? "Done" : "Delete tags"}
+                </button>
+              ) : null}
             </div>
+            {managingTags && tags.length ? (
+              <div className="tag-manager">
+                <p>Deleting a tag removes it from all movies and series.</p>
+                <div className="tag-tabs">
+                  {tags.map((t) => (
+                    <button
+                      key={t.id}
+                      disabled={tagBusy || !!busy}
+                      onClick={() => void deleteTag(t)}
+                      aria-label={"Delete tag " + t.name}
+                    >
+                      {t.name} ×
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {creatingTag ? (
               <form className="new-tag" onSubmit={addTag}>
                 <input

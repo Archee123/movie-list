@@ -512,16 +512,12 @@ footer p {
 }
 .movie-bottom {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 5px;
-}
-.movie-bottom p {
-  font-size: 11px;
-  color: var(--muted);
-  margin: 6px 0;
+  margin-top: 4px;
 }
 .remove {
+  flex-shrink: 0;
   font-size: 20px;
   min-width: 44px;
   min-height: 44px;
@@ -872,13 +868,14 @@ footer p {
   color: var(--muted);
 }
 .movie-tags {
-  margin-top: 8px;
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--muted);
 }
 .movie-tags summary {
-  padding: 5px 0;
-  min-height: 32px;
+  padding: 10px 0;
+  min-height: 44px;
   overflow-wrap: anywhere;
 }
 .movie-tags fieldset {

@@ -598,52 +598,47 @@ export default function Frame({
                         )}
                       </div>
                       <h3>{movie.title}</h3>
-                      <details className="movie-tags">
-                        <summary>
-                          {(movie.tags || []).length
-                            ? (movie.tags || [])
-                                .map(
-                                  (id) => tags.find((t) => t.id === id)?.name,
-                                )
-                                .filter(Boolean)
-                                .join(" · ")
-                            : "Add tags"}
-                        </summary>
-                        <fieldset disabled={busy === movie.id}>
-                          <legend className="sr-only">
-                            Tags for {movie.title}
-                          </legend>
-                          {tags.length ? (
-                            tags.map((t) => (
-                              <label key={t.id}>
-                                <input
-                                  type="checkbox"
-                                  checked={(movie.tags || []).includes(t.id)}
-                                  onChange={(e) =>
-                                    void tagMovie(
-                                      movie,
-                                      e.target.checked
-                                        ? [...(movie.tags || []), t.id]
-                                        : (movie.tags || []).filter(
-                                            (id) => id !== t.id,
-                                          ),
-                                    )
-                                  }
-                                />
-                                {t.name}
-                              </label>
-                            ))
-                          ) : (
-                            <p>Create a tag using “New tag” above.</p>
-                          )}
-                        </fieldset>
-                      </details>
                       <div className="movie-bottom">
-                        <p>
-                          {movie.watched
-                            ? "Watched by " + movie.watchedBy
-                            : "Added by " + movie.addedBy}
-                        </p>
+                        <details className="movie-tags">
+                          <summary>
+                            {(movie.tags || []).length
+                              ? (movie.tags || [])
+                                  .map(
+                                    (id) => tags.find((t) => t.id === id)?.name,
+                                  )
+                                  .filter(Boolean)
+                                  .join(" · ")
+                              : "Add tags"}
+                          </summary>
+                          <fieldset disabled={busy === movie.id}>
+                            <legend className="sr-only">
+                              Tags for {movie.title}
+                            </legend>
+                            {tags.length ? (
+                              tags.map((t) => (
+                                <label key={t.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={(movie.tags || []).includes(t.id)}
+                                    onChange={(e) =>
+                                      void tagMovie(
+                                        movie,
+                                        e.target.checked
+                                          ? [...(movie.tags || []), t.id]
+                                          : (movie.tags || []).filter(
+                                              (id) => id !== t.id,
+                                            ),
+                                      )
+                                    }
+                                  />
+                                  {t.name}
+                                </label>
+                              ))
+                            ) : (
+                              <p>Create a tag using “New tag” above.</p>
+                            )}
+                          </fieldset>
+                        </details>
                         <button
                           className="remove"
                           aria-label={"Remove " + movie.title}

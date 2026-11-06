@@ -8,7 +8,7 @@ Choose Archie or Susu and enter the shared passcode. Both profiles see the same 
 
 Movie search and posters come from TMDB. IMDb ratings come from OMDb, matched by the IMDb ID returned by TMDB. No TMDB score is presented as an IMDb rating. Missing ratings display a dash. Ratings are fetched when saving and cached for up to seven days. Manual title entries have no poster or rating. Search results identify films by poster and year; ratings appear on saved films.
 
-Both profiles share storage across devices. Lists refresh on window focus and every 30 seconds while visible. Each movie has its own private record; writes to different movies do not overwrite each other. Simultaneous changes to the same movie use the last successful write. Remove soft-deletes a record.
+Both profiles share storage across devices. Lists load when you open or unlock the app. Your own edits appear immediately; use Refresh to see changes made on another device. There is no background polling or refresh on window focus, reducing Vercel Blob list and read operations. Overlapping refresh requests are ignored. Each movie has its own private record; writes to different movies do not overwrite each other. Simultaneous changes to the same movie use the last successful write. Remove soft-deletes a record.
 
 ## Tags and series
 

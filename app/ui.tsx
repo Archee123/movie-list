@@ -131,6 +131,8 @@ export default function Frame({
   const [creatingTag, setCreatingTag] = useState(false);
   const [tagBusy, setTagBusy] = useState(false);
   const [managingTags, setManagingTags] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlight = useRef(false);
   async function deleteTag(tag: { id: string; name: string }) {
     if (!window.confirm(`Delete “${tag.name}” from all movies and series?`))
       return;
@@ -186,6 +188,10 @@ export default function Frame({
   }
   const dialog = useRef<HTMLDialogElement>(null);
   const refresh = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    setRefreshing(true);
+    setError("");
     try {
       const [d, t] = await Promise.all([api("movies"), api("tags")]);
       setTags(t.tags);
@@ -195,20 +201,14 @@ export default function Frame({
       setLoaded(true);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      refreshInFlight.current = false;
+      setRefreshing(false);
     }
   }, []);
   useEffect(() => {
     if (!who) return;
     void refresh();
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, 30000);
-    const focus = () => void refresh();
-    window.addEventListener("focus", focus);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("focus", focus);
-    };
   }, [who, refresh]);
   useEffect(() => {
     if (adding) dialog.current?.showModal();
@@ -421,6 +421,13 @@ export default function Frame({
                 </span>
               </h1>
               <div className="list-actions">
+                <button
+                  className="text-button"
+                  onClick={() => void refresh()}
+                  disabled={refreshing}
+                >
+                  {refreshing ? "Refreshing…" : "Refresh"}
+                </button>
                 {(tab === "watched" ? watched.length : unwatched.length) > 0 ? (
                   <button className="primary" onClick={() => setAdding(true)}>
                     + Add movie
@@ -456,6 +463,10 @@ export default function Frame({
                 ) : null}
               </div>
             </div>
+            <p className="connection-note">
+              Your edits appear immediately. Refresh to see changes made on
+              another device.
+            </p>
             <div className="tag-tabs" aria-label="Filter by tags">
               <button
                 aria-pressed={!selectedTags.length}
@@ -562,10 +573,8 @@ export default function Frame({
                 {error}{" "}
                 <button
                   className="text-button"
-                  onClick={() => {
-                    setError("");
-                    void refresh();
-                  }}
+                  onClick={() => void refresh()}
+                  disabled={refreshing}
                 >
                   Try again
                 </button>

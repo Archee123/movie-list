@@ -1,3 +1,4 @@
+export type Tag = { id: string; name: string };
 export type Profile = "Archie" | "Susu";
 export type Movie = {
   tags?: string[];

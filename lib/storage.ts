@@ -1,57 +1,105 @@
 import { BlobPreconditionFailedError, get, list, put } from "@vercel/blob";
-import type { Movie } from "./types";
-const prefix = "frame/movies/";
-async function readMovieRecord(id: string) {
-  const r = await get(prefix + id + ".json", {
-    access: "private",
-    useCache: false,
+import type { Movie, Tag } from "./types";
+
+const path = "frame/collection.json";
+const privateRead = { access: "private", useCache: false } as const;
+const privateWrite = {
+  access: "private",
+  addRandomSuffix: false,
+  contentType: "application/json",
+} as const;
+
+type Collection = { movies: Movie[]; tags: Tag[] };
+
+async function readCollectionRecord() {
+  const result = await get(path, privateRead);
+  if (!result) return null;
+  if (result.statusCode !== 200) throw new Error("Could not read collection");
+  const collection: Collection = await new Response(result.stream).json();
+  if (!Array.isArray(collection.movies) || !Array.isArray(collection.tags))
+    throw new Error("Invalid collection");
+  return { collection, etag: result.blob.etag };
+}
+
+async function readLegacyRecords<T>(prefix: string): Promise<T[]> {
+  const records: T[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await list({ prefix, cursor, limit: 1000 });
+    for (let i = 0; i < page.blobs.length; i += 20) {
+      const batch = await Promise.all(
+        page.blobs.slice(i, i + 20).map(async ({ pathname }) => {
+          const result = await get(pathname, privateRead);
+          if (result?.statusCode !== 200)
+            throw new Error("Could not read legacy record " + pathname);
+          return (await new Response(result.stream).json()) as T;
+        }),
+      );
+      records.push(...batch);
+    }
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return records;
+}
+
+async function migrateCollection() {
+  const [movies, tags] = await Promise.all([
+    readLegacyRecords<Movie>("frame/movies/"),
+    readLegacyRecords<Tag>("frame/tags/"),
+  ]);
+  const collection = { movies, tags };
+  try {
+    const saved = await put(path, JSON.stringify(collection), {
+      ...privateWrite,
+      allowOverwrite: false,
+    });
+    return { collection, etag: saved.etag };
+  } catch (error) {
+    // Another instance may have initialized the collection first.
+    const existing = await readCollectionRecord();
+    if (existing) return existing;
+    throw error;
+  }
+}
+
+let migration: ReturnType<typeof migrateCollection> | undefined;
+
+async function loadCollection() {
+  const existing = await readCollectionRecord();
+  if (existing) return existing;
+  migration ??= migrateCollection().finally(() => {
+    migration = undefined;
   });
-  if (!r || r.statusCode !== 200) return null;
-  const movie: Movie = await new Response(r.stream).json();
-  return { movie, etag: r.blob.etag };
+  return migration;
 }
-export async function readMovie(id: string): Promise<Movie | null> {
-  return (await readMovieRecord(id))?.movie ?? null;
+
+export async function readCollection() {
+  const { collection } = await loadCollection();
+  return {
+    movies: collection.movies
+      .filter((movie) => !movie.deleted)
+      .sort((a, b) => b.addedAt.localeCompare(a.addedAt)),
+    tags: [...collection.tags].sort((a, b) => a.name.localeCompare(b.name)),
+  };
 }
-export async function saveMovie(movie: Movie, ifMatch?: string) {
-  await put(prefix + movie.id + ".json", JSON.stringify(movie), {
-    access: "private",
-    allowOverwrite: true,
-    ifMatch,
-    addRandomSuffix: false,
-    contentType: "application/json",
-  });
-  return movie;
-}
-export async function updateMovie(
-  id: string,
-  update: (movie: Movie) => Movie,
-): Promise<Movie | null> {
+
+export async function updateCollection<T>(
+  update: (collection: Collection) => { result: T; changed: boolean },
+): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    const record = await readMovieRecord(id);
-    if (!record || record.movie.deleted) return null;
-    const updated = update(record.movie);
-    if (updated === record.movie) return updated;
+    const { collection, etag } = await loadCollection();
+    const { result, changed } = update(collection);
+    if (!changed) return result;
     try {
-      return await saveMovie(updated, record.etag);
+      await put(path, JSON.stringify(collection), {
+        ...privateWrite,
+        allowOverwrite: true,
+        ifMatch: etag,
+      });
+      return result;
     } catch (error) {
-      if (!(error instanceof BlobPreconditionFailedError) || attempt >= 2)
+      if (!(error instanceof BlobPreconditionFailedError) || attempt >= 3)
         throw error;
     }
   }
-}
-export async function allMovies() {
-  let cursor: string | undefined;
-  const ids: string[] = [];
-  do {
-    const page = await list({ prefix, cursor, limit: 1000 });
-    ids.push(...page.blobs.map((b) => b.pathname.slice(prefix.length, -5)));
-    cursor = page.hasMore ? page.cursor : undefined;
-  } while (cursor);
-  const movies: Movie[] = [];
-  for (let i = 0; i < ids.length; i += 20) {
-    const chunk = await Promise.all(ids.slice(i, i + 20).map(readMovie));
-    movies.push(...chunk.filter((m): m is Movie => !!m && !m.deleted));
-  }
-  return movies.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
 }

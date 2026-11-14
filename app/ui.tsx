@@ -209,8 +209,8 @@ export default function Frame({
     setRefreshing(true);
     setError("");
     try {
-      const [d, t] = await Promise.all([api("movies"), api("tags")]);
-      setTags(t.tags);
+      const d = await api("movies");
+      setTags(d.tags);
       setMovies(d.movies);
       setCatalog(d.catalogReady);
       setRatings(d.ratingsReady);
@@ -586,14 +586,7 @@ export default function Frame({
             </div>
             {error ? (
               <div className="error error-bar" role="alert">
-                {error}{" "}
-                <button
-                  className="text-button"
-                  onClick={() => void refresh()}
-                  disabled={refreshing}
-                >
-                  Try again
-                </button>
+                {error}
               </div>
             ) : null}
             <p className="notice" role="status">

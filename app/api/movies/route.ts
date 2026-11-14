@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { profile, json, sameOrigin } from "@/lib/auth";
-import { allMovies, readMovie, saveMovie } from "@/lib/storage";
+import { readCollection, updateCollection } from "@/lib/storage";
+import type { Movie } from "@/lib/types";
 import { catalogReady, movieDetails } from "@/lib/catalog";
 export async function GET() {
   if (!(await profile())) return json({ error: "Please unlock Frame." }, 401);
   try {
     return json({
-      movies: await allMovies(),
+      ...(await readCollection()),
       catalogReady: catalogReady(),
       ratingsReady: !!process.env.OMDB_API_KEY,
     });
@@ -24,11 +25,9 @@ export async function POST(req: Request) {
   try {
     const d = await req.json();
     let film;
+    let manual = false;
     if (typeof d.tmdbId === "string" && /^(tv-)?\d{1,12}$/.test(d.tmdbId)) {
       film = await movieDetails(d.tmdbId);
-      const existing = await readMovie(film.id);
-      if (existing && !existing.deleted)
-        return json({ movie: existing, alreadyAdded: true });
     } else {
       if (
         typeof d.title !== "string" ||
@@ -41,12 +40,7 @@ export async function POST(req: Request) {
         );
       if (d.year && !/^\d{4}$/.test(d.year))
         return json({ error: "Enter a four-digit year." }, 400);
-      const existing = (await allMovies()).find(
-        (m) =>
-          m.title.toLowerCase() === d.title.trim().toLowerCase() &&
-          m.year === (d.year || ""),
-      );
-      if (existing) return json({ movie: existing, alreadyAdded: true });
+      manual = true;
       film = {
         id: "manual-" + randomUUID(),
         title: d.title.trim(),
@@ -57,7 +51,7 @@ export async function POST(req: Request) {
         overview: "",
       };
     }
-    const movie = await saveMovie({
+    const movie: Movie = {
       ...film,
       addedBy: who,
       addedAt: new Date().toISOString(),
@@ -65,8 +59,27 @@ export async function POST(req: Request) {
       watched: false,
       watchedBy: null,
       watchedAt: null,
+    };
+    const result = await updateCollection(({ movies }) => {
+      const existing = movies.find(
+        (item) =>
+          !item.deleted &&
+          (manual
+            ? item.title.toLowerCase() === movie.title.toLowerCase() &&
+              item.year === movie.year
+            : item.id === movie.id),
+      );
+      if (existing)
+        return {
+          result: { movie: existing, alreadyAdded: true },
+          changed: false,
+        };
+      const index = movies.findIndex((item) => item.id === movie.id);
+      if (index === -1) movies.push(movie);
+      else movies[index] = movie;
+      return { result: { movie, alreadyAdded: false }, changed: true };
     });
-    return json({ movie });
+    return json(result);
   } catch {
     return json({ error: "We couldn’t add that film. Please try again." }, 503);
   }

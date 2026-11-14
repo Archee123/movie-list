@@ -1,9 +1,9 @@
 import { profile, json, sameOrigin } from "@/lib/auth";
-import { allTags } from "@/lib/tags";
-import { updateMovie } from "@/lib/storage";
-import type { Movie } from "@/lib/types";
+import { updateCollection } from "@/lib/storage";
+import type { Movie, Tag } from "@/lib/types";
 
 class UnwatchedRatingError extends Error {}
+class InvalidTagsError extends Error {}
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -16,7 +16,7 @@ export async function PATCH(
     return json({ error: "Invalid movie" }, 400);
   try {
     const d = await req.json();
-    let update: (movie: Movie) => Movie;
+    let update: (movie: Movie, tags: Tag[]) => Movie;
     if (d.personalRating !== undefined) {
       const rating: unknown = d.personalRating;
       if (
@@ -39,15 +39,18 @@ export async function PATCH(
         return { ...movie, personalRatings };
       };
     } else if (d.tags !== undefined) {
-      const available = new Set((await allTags()).map((t) => t.id));
       if (
         !Array.isArray(d.tags) ||
         d.tags.length > 50 ||
-        !d.tags.every((t: unknown) => typeof t === "string" && available.has(t))
+        !d.tags.every((t: unknown) => typeof t === "string")
       )
         return json({ error: "Invalid tags" }, 400);
       const tags = [...new Set<string>(d.tags)];
-      update = (movie) => ({ ...movie, tags });
+      update = (movie, available) => {
+        if (!tags.every((id) => available.some((tag) => tag.id === id)))
+          throw new InvalidTagsError();
+        return { ...movie, tags };
+      };
     } else if (d.deleted === true) {
       update = (movie) => ({ ...movie, deleted: true });
     } else if (typeof d.watched === "boolean") {
@@ -61,10 +64,18 @@ export async function PATCH(
     } else {
       return json({ error: "Invalid update" }, 400);
     }
-    const movie = await updateMovie(id, update);
+    const movie = await updateCollection<Movie | null>(({ movies, tags }) => {
+      const index = movies.findIndex((item) => item.id === id && !item.deleted);
+      if (index === -1) return { result: null, changed: false };
+      const updated = update(movies[index], tags);
+      movies[index] = updated;
+      return { result: updated, changed: true };
+    });
     if (!movie) return json({ error: "Movie not found" }, 404);
     return json({ movie });
   } catch (error) {
+    if (error instanceof InvalidTagsError)
+      return json({ error: "Invalid tags" }, 400);
     if (error instanceof UnwatchedRatingError)
       return json(
         { error: "Mark this title as watched before rating it." },

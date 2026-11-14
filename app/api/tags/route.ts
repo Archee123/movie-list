@@ -1,11 +1,10 @@
 import { profile, json, sameOrigin } from "@/lib/auth";
-import { del } from "@vercel/blob";
-import { allMovies, updateMovie } from "@/lib/storage";
-import { allTags, createTag } from "@/lib/tags";
+import { readCollection, updateCollection } from "@/lib/storage";
+import { tagId } from "@/lib/tags";
 export async function GET() {
   if (!(await profile())) return json({ error: "Please sign in." }, 401);
   try {
-    return json({ tags: await allTags() });
+    return json({ tags: (await readCollection()).tags });
   } catch {
     return json({ error: "Could not load tags." }, 503);
   }
@@ -24,7 +23,16 @@ export async function POST(req: Request) {
         { error: "Use a tag name between 1 and 30 characters." },
         400,
       );
-    return json({ tag: await createTag(d.name.trim()) });
+    const name: string = d.name.trim();
+    const id = tagId(name);
+    const tag = await updateCollection(({ tags }) => {
+      const existing = tags.find((item) => item.id === id);
+      if (existing) return { result: existing, changed: false };
+      const created = { id, name };
+      tags.push(created);
+      return { result: created, changed: true };
+    });
+    return json({ tag });
   } catch {
     return json({ error: "Could not create tag." }, 503);
   }
@@ -37,16 +45,17 @@ export async function DELETE(req: Request) {
     const d = await req.json();
     if (typeof d.id !== "string" || !/^[a-f0-9]{24}$/.test(d.id))
       return json({ error: "Invalid tag." }, 400);
-    const movies = await allMovies();
-    for (const movie of movies) {
-      if (movie.tags?.includes(d.id))
-        await updateMovie(movie.id, (current) =>
-          current.tags?.includes(d.id)
-            ? { ...current, tags: current.tags.filter((id) => id !== d.id) }
-            : current,
-        );
-    }
-    await del("frame/tags/" + d.id + ".json");
+    const id: string = d.id;
+    await updateCollection((collection) => {
+      const index = collection.tags.findIndex((tag) => tag.id === id);
+      if (index === -1) return { result: undefined, changed: false };
+      collection.tags.splice(index, 1);
+      for (const movie of collection.movies) {
+        if (movie.tags?.includes(id))
+          movie.tags = movie.tags.filter((tag) => tag !== id);
+      }
+      return { result: undefined, changed: true };
+    });
     return json({ deleted: d.id });
   } catch {
     return json({ error: "Could not delete tag. Please try again." }, 503);

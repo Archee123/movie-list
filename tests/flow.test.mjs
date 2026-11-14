@@ -88,12 +88,32 @@ test(
         (await persisted.json()).movies.find((m) => m.id === id).watched,
         true,
       );
+      const rate = (cookie, personalRating) =>
+        call("movies/" + id, {
+          method: "PATCH",
+          cookie,
+          body: { personalRating },
+        });
+      assert.equal((await rate(archie, 10.1)).status, 400);
+      const scores = await Promise.all([rate(archie, 8.5), rate(susu, 0)]);
+      assert.ok(scores.every((response) => response.status === 200));
+      const scored = await call("movies", { cookie: susu });
+      assert.deepEqual(
+        (await scored.json()).movies.find((m) => m.id === id).personalRatings,
+        { Archie: 8.5, Susu: 0 },
+      );
+      const cleared = await rate(susu, null);
+      assert.deepEqual((await cleared.json()).movie.personalRatings, {
+        Archie: 8.5,
+      });
+
       const undo = await call("movies/" + id, {
         method: "PATCH",
         cookie: archie,
         body: { watched: false },
       });
       assert.equal((await undo.json()).movie.watched, false);
+      assert.equal((await rate(archie, 9)).status, 409);
     } finally {
       if (id)
         assert.equal(

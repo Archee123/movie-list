@@ -1,22 +1,44 @@
-import { get, list, put } from "@vercel/blob";
+import { BlobPreconditionFailedError, get, list, put } from "@vercel/blob";
 import type { Movie } from "./types";
 const prefix = "frame/movies/";
-export async function readMovie(id: string): Promise<Movie | null> {
+async function readMovieRecord(id: string) {
   const r = await get(prefix + id + ".json", {
     access: "private",
     useCache: false,
   });
   if (!r || r.statusCode !== 200) return null;
-  return JSON.parse(await new Response(r.stream).text());
+  const movie: Movie = await new Response(r.stream).json();
+  return { movie, etag: r.blob.etag };
 }
-export async function saveMovie(movie: Movie) {
+export async function readMovie(id: string): Promise<Movie | null> {
+  return (await readMovieRecord(id))?.movie ?? null;
+}
+export async function saveMovie(movie: Movie, ifMatch?: string) {
   await put(prefix + movie.id + ".json", JSON.stringify(movie), {
     access: "private",
     allowOverwrite: true,
+    ifMatch,
     addRandomSuffix: false,
     contentType: "application/json",
   });
   return movie;
+}
+export async function updateMovie(
+  id: string,
+  update: (movie: Movie) => Movie,
+): Promise<Movie | null> {
+  for (let attempt = 0; ; attempt++) {
+    const record = await readMovieRecord(id);
+    if (!record || record.movie.deleted) return null;
+    const updated = update(record.movie);
+    if (updated === record.movie) return updated;
+    try {
+      return await saveMovie(updated, record.etag);
+    } catch (error) {
+      if (!(error instanceof BlobPreconditionFailedError) || attempt >= 2)
+        throw error;
+    }
+  }
 }
 export async function allMovies() {
   let cursor: string | undefined;

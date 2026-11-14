@@ -186,6 +186,22 @@ export default function Frame({
       setBusy(null);
     }
   }
+  async function rateMovie(movie: Movie, score: number | null) {
+    setBusy(movie.id);
+    setError("");
+    try {
+      const d = await api("movies/" + movie.id, "PATCH", {
+        personalRating: score,
+      });
+      setMovies((ms) => ms.map((m) => (m.id === movie.id ? d.movie : m)));
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  }
   const dialog = useRef<HTMLDialogElement>(null);
   const refresh = useCallback(async () => {
     if (refreshInFlight.current) return;
@@ -655,6 +671,15 @@ export default function Frame({
                         )}
                       </div>
                       <h3>{movie.title}</h3>
+                      {movie.watched && (
+                        <PersonalRatings
+                          key={who}
+                          movie={movie}
+                          who={who}
+                          busy={busy === movie.id}
+                          onSave={(score) => rateMovie(movie, score)}
+                        />
+                      )}
                       <div className="movie-bottom">
                         <details className="movie-tags">
                           <summary>
@@ -755,6 +780,99 @@ export default function Frame({
         ) : null}
       </dialog>
     </>
+  );
+}
+
+function PersonalRatings({
+  movie,
+  who,
+  busy,
+  onSave,
+}: {
+  movie: Movie;
+  who: Profile;
+  busy: boolean;
+  onSave: (score: number | null) => Promise<boolean>;
+}) {
+  const ownScore = movie.personalRatings?.[who];
+  const [draft, setDraft] = useState<string | null>(null);
+
+  async function save(score: number | null) {
+    if (await onSave(score)) setDraft(null);
+  }
+
+  return (
+    <div className="personal-ratings">
+      <div className="personal-scores">
+        {(["Archie", "Susu"] as const).map((name) => {
+          const score = movie.personalRatings?.[name];
+          if (score === undefined) return null;
+          return (
+            <span key={name} className={"personal-score " + name.toLowerCase()}>
+              <span className="sr-only">{name} rated </span>
+              {score}/10
+            </span>
+          );
+        })}
+        {draft === null && (
+          <button
+            className="text-button"
+            aria-label={
+              (ownScore === undefined ? "Rate " : "Edit your rating for ") +
+              movie.title
+            }
+            onClick={() => setDraft(ownScore?.toString() ?? "")}
+            disabled={busy}
+          >
+            {ownScore === undefined ? "Rate" : "Edit rating"}
+          </button>
+        )}
+      </div>
+      {draft !== null && (
+        <form
+          className="personal-rating-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save(Number(draft));
+          }}
+        >
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            max="10"
+            step="0.1"
+            required
+            autoFocus
+            disabled={busy}
+            aria-label={"Your rating out of 10 for " + movie.title}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <button className="text-button" disabled={busy}>
+            Save
+          </button>
+          <button
+            type="button"
+            className="text-button"
+            disabled={busy}
+            onClick={() => setDraft(null)}
+          >
+            Cancel
+          </button>
+          {ownScore !== undefined && (
+            <button
+              type="button"
+              className="text-button"
+              disabled={busy}
+              onClick={() => void save(null)}
+            >
+              Clear rating
+            </button>
+          )}
+        </form>
+      )}
+    </div>
   );
 }
 

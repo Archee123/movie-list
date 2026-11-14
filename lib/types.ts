@@ -7,6 +7,7 @@ export type Movie = {
   year: string;
   poster: string | null;
   rating: string | null;
+  personalRatings?: Partial<Record<Profile, number>>;
   imdbId: string | null;
   overview: string;
   addedBy: Profile;

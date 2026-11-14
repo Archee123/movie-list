@@ -510,6 +510,30 @@ footer p {
   margin: 7px 0 0;
   font-weight: 700;
 }
+.personal-scores,
+.personal-rating-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.personal-rating-form {
+  margin-top: 6px;
+}
+.personal-rating-form input {
+  width: 4.5rem;
+  padding: 5px 7px;
+}
+.personal-score {
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.personal-ratings .text-button {
+  padding: 3px 2px;
+  font-size: 0.8rem;
+}
 .movie-bottom {
   display: flex;
   align-items: flex-start;

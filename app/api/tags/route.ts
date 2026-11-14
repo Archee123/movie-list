@@ -1,6 +1,6 @@
 import { profile, json, sameOrigin } from "@/lib/auth";
 import { del } from "@vercel/blob";
-import { allMovies, saveMovie } from "@/lib/storage";
+import { allMovies, updateMovie } from "@/lib/storage";
 import { allTags, createTag } from "@/lib/tags";
 export async function GET() {
   if (!(await profile())) return json({ error: "Please sign in." }, 401);
@@ -40,10 +40,11 @@ export async function DELETE(req: Request) {
     const movies = await allMovies();
     for (const movie of movies) {
       if (movie.tags?.includes(d.id))
-        await saveMovie({
-          ...movie,
-          tags: movie.tags.filter((id) => id !== d.id),
-        });
+        await updateMovie(movie.id, (current) =>
+          current.tags?.includes(d.id)
+            ? { ...current, tags: current.tags.filter((id) => id !== d.id) }
+            : current,
+        );
     }
     await del("frame/tags/" + d.id + ".json");
     return json({ deleted: d.id });

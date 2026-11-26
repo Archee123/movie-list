@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Movie, Profile, SearchMovie } from "@/lib/types";
+import type { Movie, Profile, SearchMovie, Tag } from "@/lib/types";
+import { FilterTag, Icon, Overlay } from "./list-controls";
 
 async function api(path: string, method = "GET", body?: unknown) {
   const r = await fetch("/api/" + path, {
@@ -125,15 +126,12 @@ export default function Frame({
     [catalog, setCatalog] = useState(true),
     [ratings, setRatings] = useState(true),
     [randomId, setRandomId] = useState<string | null>(null);
-  const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [newTag, setNewTag] = useState("");
-  const [creatingTag, setCreatingTag] = useState(false);
   const [tagBusy, setTagBusy] = useState(false);
-  const [managingTags, setManagingTags] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const refreshInFlight = useRef(false);
-  async function deleteTag(tag: { id: string; name: string }) {
+  async function deleteTag(tag: Tag) {
     if (!window.confirm(`Delete “${tag.name}” from all movies and series?`))
       return;
     setTagBusy(true);
@@ -155,21 +153,21 @@ export default function Frame({
       setTagBusy(false);
     }
   }
-  async function addTag(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function addTag(name: string) {
     setTagBusy(true);
     setError("");
     try {
-      const d = await api("tags", "POST", { name: newTag });
+      const d = await api("tags", "POST", { name });
       setTags((ts) =>
         [...ts.filter((t) => t.id !== d.tag.id), d.tag].sort((a, b) =>
           a.name.localeCompare(b.name),
         ),
       );
-      setNewTag("");
-      setCreatingTag(false);
+      setNotice(`Created “${d.tag.name}”.`);
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setTagBusy(false);
     }
@@ -250,6 +248,10 @@ export default function Frame({
       setWho(null);
       setMovies([]);
       setLoaded(false);
+      setSelectedTags([]);
+      setFilter("");
+      setTab("watchlist");
+      setRandomId(null);
       setError("");
       setNotice("");
     } catch (e) {
@@ -320,7 +322,7 @@ export default function Frame({
                 : b.addedAt.localeCompare(a.addedAt),
     );
   return (
-    <>
+    <div className="cinema-app" data-profile={(who ?? choice).toLowerCase()}>
       <header>
         <Brand />
         {who ? (
@@ -328,6 +330,7 @@ export default function Frame({
             <nav aria-label="Movie lists">
               <button
                 className={tab === "watchlist" ? "active" : ""}
+                aria-pressed={tab === "watchlist"}
                 onClick={() => {
                   setTab("watchlist");
                   setRandomId(null);
@@ -337,6 +340,7 @@ export default function Frame({
               </button>
               <button
                 className={tab === "watched" ? "active" : ""}
+                aria-pressed={tab === "watched"}
                 onClick={() => {
                   setTab("watched");
                   setRandomId(null);
@@ -430,166 +434,108 @@ export default function Frame({
             }
           >
             <div className="list-heading">
-              <h1>
-                {tab === "watched" ? "Watched together" : "On our watchlist"}{" "}
-                <span>
-                  {tab === "watched" ? watched.length : unwatched.length}
-                </span>
-              </h1>
-              <div className="list-actions">
-                <button
-                  className="text-button"
-                  onClick={() => void refresh()}
-                  disabled={refreshing}
+              <h1>{tab === "watched" ? "Watched" : "Watchlist"}</h1>
+              <div className="list-tools">
+                <label className="list-filter">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="10" cy="10" r="6" />
+                    <path d="m15 15 5 5" />
+                  </svg>
+                  <input
+                    type="search"
+                    aria-label="Filter your list"
+                    placeholder="Filter your list"
+                    value={filter}
+                    onChange={(event) => setFilter(event.target.value)}
+                  />
+                </label>
+                <Overlay
+                  label="Tags"
+                  className="toolbar-button tag-trigger"
+                  button={
+                    <>
+                      <Icon name="tag" />
+                      <span>Tags{selectedTags.length ? ` (${selectedTags.length})` : ""}</span>
+                      <Icon name="chevron" />
+                    </>
+                  }
                 >
-                  {refreshing ? "Refreshing…" : "Refresh"}
+                  {() => (
+                    <TagPicker
+                      tags={tags}
+                      selected={selectedTags}
+                      busy={tagBusy || !!busy}
+                      onToggle={(id) =>
+                        setSelectedTags((ids) =>
+                          ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
+                        )
+                      }
+                      onClear={() => setSelectedTags([])}
+                      onAdd={addTag}
+                      onDelete={deleteTag}
+                    />
+                  )}
+                </Overlay>
+                <label className="sort-label">
+                  <span className="sr-only">Sort movies</span>
+                  <select value={sort} onChange={(event) => setSort(event.target.value)}>
+                    <option value="recent">Recently {tab === "watched" ? "watched" : "added"}</option>
+                    <option value="rating">IMDb rating</option>
+                    <option value="title">Title A–Z</option>
+                    <option value="tags">Tags A–Z</option>
+                    <option value="year">Release year</option>
+                  </select>
+                </label>
+                <button className="primary add-title" onClick={() => setAdding(true)}>
+                  <Icon name="add" /> <span>Add title</span>
                 </button>
-                {(tab === "watched" ? watched.length : unwatched.length) > 0 ? (
-                  <button className="primary" onClick={() => setAdding(true)}>
-                    + Add movie
-                  </button>
-                ) : null}
+              </div>
+            </div>
+            <div className="list-utilities">
+              {selectedTags.length ? (
+                <button className="text-button" onClick={() => setSelectedTags([])}>
+                  Clear filters
+                </button>
+              ) : null}
+              <div className="list-actions">
                 {tab === "watchlist" && unwatched.length > 0 ? (
                   <button
-                    className="text-button surprise"
+                    className="utility-button"
                     onClick={() => {
-                      const m =
-                        unwatched[Math.floor(Math.random() * unwatched.length)];
-                      setRandomId(m.id);
+                      const movie = unwatched[Math.floor(Math.random() * unwatched.length)];
+                      setRandomId(movie.id);
                       setFilter("");
-                      setNotice("Tonight’s pick: " + m.title);
+                      setSelectedTags([]);
+                      setNotice("Tonight’s pick: " + movie.title);
                       setTimeout(
-                        () =>
-                          document
-                            .getElementById("movie-" + m.id)
-                            ?.scrollIntoView({
-                              behavior: window.matchMedia(
-                                "(prefers-reduced-motion: reduce)",
-                              ).matches
-                                ? "instant"
-                                : "smooth",
-                              block: "center",
-                            }),
+                        () => document.getElementById("movie-" + movie.id)?.scrollIntoView({
+                          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                            ? "instant"
+                            : "smooth",
+                          block: "center",
+                        }),
                         30,
                       );
                     }}
                   >
-                    Pick for us
+                    <Icon name="shuffle" /> Pick for us
                   </button>
                 ) : null}
-              </div>
-            </div>
-            <p className="connection-note">
-              Your edits appear immediately. Refresh to see changes made on
-              another device.
-            </p>
-            <div className="tag-tabs" aria-label="Filter by tags">
-              <button
-                aria-pressed={!selectedTags.length}
-                onClick={() => setSelectedTags([])}
-              >
-                All titles
-              </button>
-              {tags.map((t) => (
                 <button
-                  key={t.id}
-                  aria-pressed={selectedTags.includes(t.id)}
-                  onClick={() =>
-                    setSelectedTags((ids) =>
-                      ids.includes(t.id)
-                        ? ids.filter((id) => id !== t.id)
-                        : [...ids, t.id],
-                    )
-                  }
+                  className="utility-button"
+                  onClick={() => void refresh()}
+                  disabled={refreshing}
                 >
-                  {t.name}
+                  <Icon name="refresh" /> {refreshing ? "Refreshing…" : "Refresh"}
                 </button>
-              ))}
-              <button
-                onClick={() => setCreatingTag((v) => !v)}
-                aria-expanded={creatingTag}
-              >
-                + New tag
-              </button>
-              {tags.length ? (
-                <button
-                  onClick={() => setManagingTags((v) => !v)}
-                  aria-expanded={managingTags}
-                >
-                  {managingTags ? "Done" : "Delete tags"}
-                </button>
-              ) : null}
-            </div>
-            {managingTags && tags.length ? (
-              <div className="tag-manager">
-                <p>Deleting a tag removes it from all movies and series.</p>
-                <div className="tag-tabs">
-                  {tags.map((t) => (
-                    <button
-                      key={t.id}
-                      disabled={tagBusy || !!busy}
-                      onClick={() => void deleteTag(t)}
-                      aria-label={"Delete tag " + t.name}
-                    >
-                      {t.name} ×
-                    </button>
-                  ))}
-                </div>
               </div>
-            ) : null}
-            {creatingTag ? (
-              <form className="new-tag" onSubmit={addTag}>
-                <input
-                  aria-label="New tag name"
-                  placeholder="e.g. Anime"
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  maxLength={30}
-                  required
-                  autoFocus
-                />
-                <button className="primary" disabled={tagBusy}>
-                  {tagBusy ? "Creating…" : "Create tag"}
-                </button>
-              </form>
-            ) : null}
-            {selectedTags.length > 1 ? (
-              <p className="tag-hint">Showing titles with all selected tags.</p>
-            ) : null}
-            <div className="list-tools">
-              <label className="list-filter">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="10" cy="10" r="6" />
-                  <path d="m15 15 5 5" />
-                </svg>
-                <input
-                  aria-label="Filter your list"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                />
-              </label>
-              <label className="sort-label">
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value)}
-                  aria-label="Sort movies"
-                >
-                  <option value="recent">
-                    Recently {tab === "watched" ? "watched" : "added"}
-                  </option>
-                  <option value="rating">IMDb rating</option>
-                  <option value="title">Title A–Z</option>
-                  <option value="tags">Tags A–Z</option>
-                  <option value="year">Release year</option>
-                </select>
-              </label>
             </div>
             {error ? (
               <div className="error error-bar" role="alert">
                 {error}
               </div>
             ) : null}
-            <p className="notice" role="status">
+            <p className={"notice" + (notice ? "" : " sr-only")} role="status">
               {notice}
             </p>
             {!catalog && loaded ? (
@@ -605,137 +551,87 @@ export default function Frame({
             {!loaded ? (
               <p className="empty">Loading our list…</p>
             ) : visible.length ? (
-              <div className="movie-grid">
+              <div className="movie-list" key={tab}>
                 {visible.map((movie) => (
                   <article
                     id={"movie-" + movie.id}
                     key={movie.id}
-                    className={
-                      "movie" + (randomId === movie.id ? " chosen" : "")
-                    }
+                    className={"movie-row" + (randomId === movie.id ? " chosen" : "")}
                   >
-                    <div className="poster-wrap">
+                    <div className="row-image">
                       <Poster movie={movie} />
-                      <button
-                        className={
-                          "watch-toggle" + (movie.watched ? " checked" : "")
-                        }
-                        disabled={busy === movie.id}
-                        aria-label={
-                          (movie.watched
-                            ? "Move back to watchlist: "
-                            : "Mark watched: ") + movie.title
-                        }
-                        title={
-                          movie.watched
-                            ? "Move back to watchlist"
-                            : "Mark watched"
-                        }
-                        onClick={() => void update(movie)}
-                      >
-                        {busy === movie.id ? "…" : "✓"}
-                      </button>
-                      {randomId === movie.id ? (
-                        <span className="tonight">Tonight’s pick</span>
+                    </div>
+                    <div className="row-title">
+                      <h2>{movie.title}</h2>
+                      <span>
+                        {movie.year || "Year unknown"}
+                        {movie.mediaType === "tv" && !movie.tags?.length ? " · Series" : ""}
+                      </span>
+                      {randomId === movie.id ? <span className="tonight">Tonight’s pick</span> : null}
+                    </div>
+                    <div className="row-tags" aria-label="Tags">
+                      {tags.filter((tag) => movie.tags?.includes(tag.id)).map((tag) => (
+                        <span className="movie-tag" key={tag.id}>{tag.name}</span>
+                      ))}
+                    </div>
+                    <div className="row-scores">
+                      {movie.rating && movie.imdbId ? (
+                        <a
+                          className="imdb-score"
+                          href={"https://www.imdb.com/title/" + movie.imdbId + "/"}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={"IMDb rating " + movie.rating + " out of 10"}
+                        >
+                          <span>IMDb</span> {movie.rating}
+                        </a>
+                      ) : (
+                        <span className="imdb-score" aria-label={movie.rating ? "IMDb rating " + movie.rating + " out of 10" : "IMDb rating unavailable"}>
+                          <span>IMDb</span> {movie.rating || "—"}
+                        </span>
+                      )}
+                      {movie.watched ? (
+                        <div className="personal-scores">
+                          {(["Archie", "Susu"] as const).map((name) => {
+                            const score = movie.personalRatings?.[name];
+                            return score === undefined ? null : (
+                              <span key={name} className={"personal-score " + name.toLowerCase()}>
+                                <span className="sr-only">{name} rated </span>
+                                {score}<span className="score-out-of">/10</span>
+                              </span>
+                            );
+                          })}
+                        </div>
                       ) : null}
                     </div>
-                    <div className="movie-info">
-                      <div className="movie-meta">
-                        <span>
-                          {movie.year || "Year unknown"}
-                          {movie.mediaType === "tv" ? " · Series" : ""}
-                        </span>
-                        {movie.rating ? (
-                          <a
-                            className="rating"
-                            href={
-                              "https://www.imdb.com/title/" + movie.imdbId + "/"
-                            }
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={
-                              "IMDb rating " + movie.rating + " out of 10"
-                            }
-                          >
-                            <span>IMDb</span> {movie.rating}
-                          </a>
-                        ) : (
-                          <span className="unrated">IMDb —</span>
+                    <div className="row-actions">
+                      <Overlay
+                        label={"More options for " + movie.title}
+                        className="toolbar-button movie-menu-trigger"
+                        button={<Icon name="more" />}
+                      >
+                        {(close) => (
+                          <MovieOptions
+                            movie={movie}
+                            who={who}
+                            tags={tags}
+                            busy={!!busy || tagBusy}
+                            onWatch={() => { close(); void update(movie); }}
+                            onRemove={() => { close(); void update(movie, true); }}
+                            onTag={(ids) => tagMovie(movie, ids)}
+                            onRate={(score) => rateMovie(movie, score)}
+                          />
                         )}
-                      </div>
-                      <h3>{movie.title}</h3>
-                      {movie.watched && (
-                        <PersonalRatings
-                          key={who}
-                          movie={movie}
-                          who={who}
-                          busy={busy === movie.id}
-                          onSave={(score) => rateMovie(movie, score)}
-                        />
-                      )}
-                      <div className="movie-bottom">
-                        <details className="movie-tags">
-                          <summary>
-                            {(movie.tags || []).length
-                              ? (movie.tags || [])
-                                  .map(
-                                    (id) => tags.find((t) => t.id === id)?.name,
-                                  )
-                                  .filter(Boolean)
-                                  .join(" · ")
-                              : "Add tags"}
-                          </summary>
-                          <fieldset disabled={busy === movie.id}>
-                            <legend className="sr-only">
-                              Tags for {movie.title}
-                            </legend>
-                            {tags.length ? (
-                              tags.map((t) => (
-                                <label key={t.id}>
-                                  <input
-                                    type="checkbox"
-                                    checked={(movie.tags || []).includes(t.id)}
-                                    onChange={(e) =>
-                                      void tagMovie(
-                                        movie,
-                                        e.target.checked
-                                          ? [...(movie.tags || []), t.id]
-                                          : (movie.tags || []).filter(
-                                              (id) => id !== t.id,
-                                            ),
-                                      )
-                                    }
-                                  />
-                                  {t.name}
-                                </label>
-                              ))
-                            ) : (
-                              <p>Create a tag using “New tag” above.</p>
-                            )}
-                          </fieldset>
-                        </details>
-                        <button
-                          className="remove"
-                          aria-label={"Remove " + movie.title}
-                          onClick={() => void update(movie, true)}
-                          disabled={busy === movie.id}
-                        >
-                          ×
-                        </button>
-                      </div>
+                      </Overlay>
                     </div>
                   </article>
                 ))}
               </div>
             ) : (
-              <div className="empty">
-                {filter || selectedTags.length ? (
-                  <p role="status">No matching films.</p>
-                ) : (
-                  <button className="primary" onClick={() => setAdding(true)}>
-                    Add movie
-                  </button>
-                )}
+              <div className="empty" role="status">
+                {filter || selectedTags.length
+                  ? "No matching titles."
+                  : tab === "watched" ? "No watched titles yet." : "Your watchlist is empty."}
               </div>
             )}
           </section>
@@ -772,100 +668,211 @@ export default function Frame({
           />
         ) : null}
       </dialog>
+    </div>
+  );
+}
+
+function TagPicker({
+  tags,
+  selected,
+  busy,
+  onToggle,
+  onClear,
+  onAdd,
+  onDelete,
+}: {
+  tags: Tag[];
+  selected: string[];
+  busy: boolean;
+  onToggle: (id: string) => void;
+  onClear: () => void;
+  onAdd: (name: string) => Promise<boolean>;
+  onDelete: (tag: Tag) => Promise<void>;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [revealedTag, setRevealedTag] = useState<string | null>(null);
+
+  return (
+    <>
+      <div className="overlay-heading">
+        <strong>Filter by tags</strong>
+        {selected.length > 0 && (
+          <button type="button" className="small-action" onClick={onClear}>Clear</button>
+        )}
+      </div>
+      {tags.map((tag) => (
+        <FilterTag
+          key={tag.id}
+          tag={tag}
+          selected={selected.includes(tag.id)}
+          revealed={revealedTag === tag.id}
+          disabled={busy}
+          onToggle={() => {
+            setRevealedTag(null);
+            onToggle(tag.id);
+          }}
+          onReveal={() => setRevealedTag(tag.id)}
+          onDelete={() => void onDelete(tag)}
+        />
+      ))}
+      <div className="overlay-divider">
+        {creating ? (
+          <form
+            className="overlay-form"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (await onAdd(name.trim())) {
+                setName("");
+                setCreating(false);
+              }
+            }}
+          >
+            <input
+              aria-label="New tag name"
+              placeholder="Tag name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={30}
+              required
+              autoFocus
+            />
+            <div className="form-actions">
+              <button type="button" className="small-action" onClick={() => setCreating(false)}>Cancel</button>
+              <button className="primary" disabled={busy || !name.trim()}>Create tag</button>
+            </div>
+          </form>
+        ) : (
+          <button type="button" className="overlay-action accent-action" onClick={() => setCreating(true)} disabled={busy}>
+            <Icon name="add" /> Add tag
+          </button>
+        )}
+      </div>
     </>
   );
 }
 
-function PersonalRatings({
+function MovieOptions({
   movie,
   who,
+  tags,
   busy,
-  onSave,
+  onWatch,
+  onRemove,
+  onTag,
+  onRate,
 }: {
   movie: Movie;
   who: Profile;
+  tags: Tag[];
   busy: boolean;
-  onSave: (score: number | null) => Promise<boolean>;
+  onWatch: () => void;
+  onRemove: () => void;
+  onTag: (ids: string[]) => Promise<void>;
+  onRate: (score: number | null) => Promise<boolean>;
 }) {
+  const [view, setView] = useState<"actions" | "tags" | "rating">("actions");
   const ownScore = movie.personalRatings?.[who];
-  const [draft, setDraft] = useState<string | null>(null);
+  const [draft, setDraft] = useState(ownScore?.toString() ?? "");
+  const assigned = movie.tags ?? [];
 
-  async function save(score: number | null) {
-    if (await onSave(score)) setDraft(null);
+  async function saveRating(score: number | null) {
+    if (await onRate(score)) setView("actions");
+  }
+
+  if (view === "tags") {
+    return (
+      <>
+        <div className="overlay-heading">
+          <strong>Tags</strong>
+          <button className="small-action" onClick={() => setView("actions")}>Done</button>
+        </div>
+        <fieldset className="assignment-list" disabled={busy}>
+          <legend className="sr-only">Tags for {movie.title}</legend>
+          {tags.length ? tags.map((tag) => (
+            <label key={tag.id} className="assignment-option">
+              <input
+                type="checkbox"
+                checked={assigned.includes(tag.id)}
+                onChange={(event) => void onTag(
+                  event.target.checked
+                    ? [...assigned, tag.id]
+                    : assigned.filter((id) => id !== tag.id),
+                )}
+              />
+              {tag.name}
+            </label>
+          )) : (
+            <p className="overlay-note">Use the + button in the Tags menu to create a tag.</p>
+          )}
+        </fieldset>
+      </>
+    );
+  }
+
+  if (view === "rating") {
+    return (
+      <form
+        className="overlay-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveRating(Number(draft));
+        }}
+      >
+        <label htmlFor={`rating-${movie.id}`}>Your rating out of 10</label>
+        <input
+          id={`rating-${movie.id}`}
+          type="number"
+          inputMode="decimal"
+          min="0"
+          max="10"
+          step="0.1"
+          required
+          autoFocus
+          disabled={busy}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <div className="form-actions">
+          <button type="button" className="small-action" onClick={() => setView("actions")}>Back</button>
+          <button className="primary" disabled={busy}>Save</button>
+        </div>
+        {ownScore !== undefined && (
+          <button type="button" className="overlay-action destructive" disabled={busy} onClick={() => void saveRating(null)}>
+            Clear rating
+          </button>
+        )}
+      </form>
+    );
   }
 
   return (
-    <div className="personal-ratings">
-      <div className="personal-scores">
-        {(["Archie", "Susu"] as const).map((name) => {
-          const score = movie.personalRatings?.[name];
-          if (score === undefined) return null;
-          return (
-            <span key={name} className={"personal-score " + name.toLowerCase()}>
-              <span className="sr-only">{name} rated </span>
-              {score}/10
-            </span>
-          );
-        })}
-        {draft === null && (
-          <button
-            className="text-button"
-            aria-label={
-              (ownScore === undefined ? "Rate " : "Edit your rating for ") +
-              movie.title
-            }
-            onClick={() => setDraft(ownScore?.toString() ?? "")}
-            disabled={busy}
-          >
-            {ownScore === undefined ? "Rate" : "Edit rating"}
-          </button>
-        )}
-      </div>
-      {draft !== null && (
-        <form
-          className="personal-rating-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save(Number(draft));
-          }}
-        >
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            max="10"
-            step="0.1"
-            required
-            autoFocus
-            disabled={busy}
-            aria-label={"Your rating out of 10 for " + movie.title}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-          />
-          <button className="text-button" disabled={busy}>
-            Save
-          </button>
-          <button
-            type="button"
-            className="text-button"
-            disabled={busy}
-            onClick={() => setDraft(null)}
-          >
-            Cancel
-          </button>
-          {ownScore !== undefined && (
-            <button
-              type="button"
-              className="text-button"
-              disabled={busy}
-              onClick={() => void save(null)}
-            >
-              Clear rating
-            </button>
-          )}
-        </form>
+    <>
+      <button type="button" className="overlay-action" disabled={busy} onClick={onWatch}>
+        {movie.watched ? "Move back to watchlist" : "Mark as watched"}
+      </button>
+      <button type="button" className="overlay-action" disabled={busy} onClick={() => setView("tags")}>
+        Edit tags <Icon name="chevron" />
+      </button>
+      {movie.watched && (
+        <button type="button" className="overlay-action" disabled={busy} onClick={() => {
+          setDraft(ownScore?.toString() ?? "");
+          setView("rating");
+        }}>
+          {ownScore === undefined ? "Rate title" : "Edit your rating"} <Icon name="chevron" />
+        </button>
       )}
-    </div>
+      {movie.imdbId && (
+        <a className="overlay-action" href={"https://www.imdb.com/title/" + movie.imdbId + "/"} target="_blank" rel="noreferrer">
+          View on IMDb
+        </a>
+      )}
+      <div className="overlay-divider">
+        <button type="button" className="overlay-action destructive" disabled={busy} onClick={onRemove}>
+          Remove from list
+        </button>
+      </div>
+    </>
   );
 }
 

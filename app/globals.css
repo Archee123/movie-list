@@ -650,6 +650,9 @@ footer p {
   font-size: 13px;
 }
 .movie-list {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 27px clamp(12px, 1.45vw, 20px);
   animation: list-enter 220ms ease-in-out both;
 }
 @keyframes list-enter {
@@ -657,35 +660,30 @@ footer p {
   to { opacity: 1; transform: translateY(0); }
 }
 .movie-row {
+  position: relative;
   display: grid;
-  grid-template-columns: clamp(100px, 16vw, 186px) minmax(0, 1.4fr) minmax(70px, 0.65fr) minmax(142px, 0.95fr) 44px;
-  grid-template-areas: "image title tags scores actions";
-  align-items: center;
-  gap: clamp(10px, 2vw, 27px);
-  min-height: 92px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-  transition: background-color var(--speed) ease-in-out;
+  grid-template-areas: "image" "title" "tags" "scores";
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  min-width: 0;
   scroll-margin: 22px;
 }
-.movie-row:last-child {
-  border-bottom: 1px solid var(--line);
-}
-.movie-row.chosen {
-  background: var(--soft);
-  border-radius: 9px;
+.movie-row.chosen .row-image {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .row-image {
   grid-area: image;
   min-width: 0;
+  border-radius: 10px;
 }
 .row-image > .poster {
   display: block;
   width: 100%;
-  aspect-ratio: 2.25;
-  border-radius: 8px;
+  aspect-ratio: 2 / 3;
+  border-radius: inherit;
   object-fit: cover;
-  object-position: center 35%;
+  object-position: center;
   background: var(--paper);
 }
 .poster-fallback {
@@ -712,10 +710,11 @@ footer p {
 .row-title {
   grid-area: title;
   min-width: 0;
+  margin-top: 9px;
 }
 .row-title h2 {
   margin: 0 0 4px;
-  font-size: clamp(15px, 2vw, 21px);
+  font-size: clamp(14px, 1.3vw, 17px);
   line-height: 1.2;
   letter-spacing: -0.026em;
   overflow-wrap: anywhere;
@@ -732,6 +731,9 @@ footer p {
 }
 .row-tags {
   grid-area: tags;
+}
+.row-tags:not(:empty), .row-scores {
+  margin-top: 6px;
 }
 .row-tags, .row-scores, .personal-scores {
   min-width: 0;
@@ -782,14 +784,22 @@ a.imdb-score:hover {
   font-weight: 600;
 }
 .row-actions {
-  grid-area: actions;
-  justify-self: end;
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
 }
 .movie-menu-trigger {
   width: 44px;
   padding: 0;
-  border-color: transparent;
-  background: transparent;
+  border-color: #ffffff40;
+  border-radius: 50%;
+  background: #15171bd9;
+  color: #fff;
+}
+.movie-menu-trigger:hover,
+.movie-menu-trigger[aria-expanded="true"] {
+  background: #15171b;
+  border-color: var(--accent);
 }
 .movie-menu-trigger .control-icon {
   width: 21px;
@@ -966,6 +976,27 @@ a.imdb-score:hover {
 .add-dialog[open] .dialog-content {
   animation: list-enter 200ms ease-in-out both;
 }
+@media (max-width: 1099px) {
+  .movie-list {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+@media (max-width: 939px) {
+  .movie-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 719px) {
+  .movie-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 519px) {
+  .movie-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 22px;
+  }
+}
 @media (max-width: 820px) {
   .list-heading {
     align-items: stretch;
@@ -1002,22 +1033,6 @@ a.imdb-score:hover {
   footer {
     width: 100%;
     padding-inline: 4%;
-  }
-  .movie-row {
-    grid-template-columns: clamp(69px, 18vw, 105px) minmax(0, 1fr) 44px;
-    grid-template-areas:
-      "image title actions"
-      "image tags actions"
-      "image scores actions";
-    gap: 4px 10px;
-    min-height: 77px;
-    padding: 10px 0;
-  }
-  .row-tags:empty {
-    display: none;
-  }
-  .row-image > .poster {
-    aspect-ratio: 1.22;
   }
   .row-title > span {
     font-size: 11px;

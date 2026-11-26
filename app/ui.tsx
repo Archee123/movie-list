@@ -479,7 +479,7 @@ export default function Frame({
                 <label className="sort-label">
                   <span className="sr-only">Sort movies</span>
                   <select value={sort} onChange={(event) => setSort(event.target.value)}>
-                    <option value="recent">Recently {tab === "watched" ? "watched" : "added"}</option>
+                    <option value="recent">Recent first</option>
                     <option value="rating">IMDb rating</option>
                     <option value="title">Title A–Z</option>
                     <option value="tags">Tags A–Z</option>

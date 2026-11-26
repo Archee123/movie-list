@@ -7,7 +7,7 @@ const privateRead = { access: "private", useCache: false } as const;
 
 type Collection = { movies: Movie[]; tags: Tag[] };
 
-let client: ReturnType<typeof neon> | undefined;
+let client: ReturnType<typeof neon<false, false>> | undefined;
 
 function database() {
   if (client) return client;
